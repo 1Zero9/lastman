@@ -32,7 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-!.env.example
+
+# rev2 prototype folder
+"Last Man Standing_rev2/"
 
 # vercel
 .vercel
