@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rvr-maroon: #731c2d;
+  --rvr-maroon-dark: #5a1624;
+  --rvr-maroon-light: #8e2438;
+  --rvr-maroon-muted: #f5eaea;
+  --rvr-silver: #c0c0c0;
+  --rvr-silver-dark: #a0a0a0;
+  --foreground: #1a1a1a;
+  --background: #fafafa;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
