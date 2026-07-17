@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { MobileTabBar } from "@/components/MobileTabBar";
 import { HeaderLogo } from "@/components/HeaderLogo";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -93,6 +94,7 @@ export default async function RootLayout({
             </div>
           </div>
         </footer>
+        <MobileTabBar isAuthenticated={Boolean(session?.user)} isOrganiser={isOrganiser} isPlatform={isPlatform} />
       </body>
     </html>
   );
