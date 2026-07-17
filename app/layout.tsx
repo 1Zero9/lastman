@@ -83,8 +83,8 @@ export default async function RootLayout({
           </div>
           <Nav isAuthenticated={Boolean(session?.user)} isOrganiser={isOrganiser} isPlatform={isPlatform} />
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6 pb-24 md:py-8 md:pb-8">{children}</main>
-        <footer className="mx-auto max-w-6xl px-4 pb-28 md:pb-10">
+        <main className="mx-auto max-w-6xl px-4 py-6 pb-32 md:py-8 md:pb-8">{children}</main>
+        <footer className="mx-auto max-w-6xl px-4 pb-36 md:pb-10">
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-xs text-text-secondary">
             <p>Unofficial fundraising tool · money is handled offline by your organiser · v{APP_VERSION}</p>
             <div className="flex gap-4">
