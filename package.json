@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "user:create": "tsx scripts/create-user.ts"
+    "user:create": "tsx scripts/create-user.ts",
+    "league:seed": "tsx scripts/seed-premier-league.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

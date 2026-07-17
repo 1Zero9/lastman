@@ -1,5 +1,7 @@
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { getAdminContext } from "@/lib/admin";
+import { buyBackEntry } from "@/lib/engine";
 import { prisma } from "@/lib/prisma";
 
 async function createParticipant(formData: FormData) {
@@ -17,7 +19,7 @@ async function createParticipant(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    const participant = await tx.participant.create({ data: { competitionId: competition.id, name, email, phone } });
+    const participant = await tx.participant.create({ data: { competitionId: competition.id, name, email, phone, inviteToken: crypto.randomUUID() } });
     await tx.entry.createMany({
       data: Array.from({ length: entryCount }, (_, index) => ({
         seasonId: season.id,
@@ -95,13 +97,36 @@ async function updatePayment(formData: FormData) {
   revalidatePath("/admin/people");
 }
 
+async function recordBuyBack(formData: FormData) {
+  "use server";
+
+  const { user, competition } = await getAdminContext();
+  const entryId = String(formData.get("entryId") ?? "");
+  if (!entryId) throw new Error("An entry is required.");
+  await prisma.$transaction((tx) => buyBackEntry(tx, entryId, competition.id, user.id));
+  revalidatePath("/admin/people");
+  revalidatePath("/standings");
+  revalidatePath("/my-entries");
+}
+
 function formatMoney(cents: number, currency: string) {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(cents / 100);
 }
 
+const entryBadge: Record<string, string> = {
+  ACTIVE: "bg-success/10 text-success",
+  PENDING_PAYMENT: "bg-warning/10 text-warning",
+  ELIMINATED: "bg-error/10 text-error",
+  WINNER: "bg-accent/20 text-nav",
+  VOID: "bg-border text-text-secondary",
+};
+
 export default async function PeoplePage() {
   const { competition } = await getAdminContext();
   const season = await prisma.season.findFirstOrThrow({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" } });
+  const requestHeaders = await headers();
+  const baseUrl = `${requestHeaders.get("x-forwarded-proto") ?? "https"}://${requestHeaders.get("host") ?? ""}`;
+  const buyBackEnabled = Boolean((season.rules as { buyBack?: { enabled?: boolean } }).buyBack?.enabled);
   const [participants, payments] = await Promise.all([
     prisma.participant.findMany({
       where: { competitionId: competition.id },
@@ -144,7 +169,7 @@ export default async function PeoplePage() {
 
       <section className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border">
         <div className="border-b border-border px-6 py-5"><h2 className="text-lg font-bold text-text">People and entries</h2></div>
-        {participants.length === 0 ? <p className="px-6 py-8 text-sm text-text-secondary">No people added yet.</p> : <div className="divide-y divide-border">{participants.map((participant) => <div key={participant.id} className="px-6 py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><div><p className="font-semibold text-text">{participant.name}</p>{participant.email && <p className="text-sm text-text-secondary">{participant.email}</p>}</div><div className="flex flex-wrap gap-2">{participant.entries.map((entry) => <span key={entry.id} className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entry.status === "ACTIVE" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>#{entry.number} · {entry.status === "ACTIVE" ? "Active" : "Payment pending"}</span>)}</div></div></div>)}</div>}
+        {participants.length === 0 ? <p className="px-6 py-8 text-sm text-text-secondary">No people added yet.</p> : <div className="divide-y divide-border">{participants.map((participant) => <div key={participant.id} className="px-6 py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><div><p className="font-semibold text-text">{participant.name}{participant.anonymisedAt ? " (removed)" : ""}</p>{participant.email && <p className="text-sm text-text-secondary">{participant.email}</p>}</div><div className="flex flex-wrap items-center gap-2">{participant.entries.map((entry) => <span key={entry.id} className="flex items-center gap-1"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entryBadge[entry.status] ?? "bg-border text-text-secondary"}`}>#{entry.number} · {entry.status.toLowerCase().replace("_", " ")}{entry.buyBackCount > 0 ? " · bought back" : ""}</span>{buyBackEnabled && entry.status === "ELIMINATED" && <form action={recordBuyBack}><input type="hidden" name="entryId" value={entry.id} /><button className="rounded-lg bg-nav px-2.5 py-1 text-xs font-semibold text-white" title={`Record an offline buy-back payment of ${formatMoney(competition.entryFeeCents, competition.currency)}`}>Buy back</button></form>}</span>)}</div></div>{!participant.anonymisedAt && (participant.confirmedAt ? <p className="mt-2 text-xs font-semibold text-success">Confirmed by entrant on {participant.confirmedAt.toLocaleDateString("en-IE")}</p> : participant.inviteToken ? <p className="mt-2 text-xs text-text-secondary">Awaiting confirmation — share this link: <code className="select-all rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-text">{baseUrl}/confirm/{participant.inviteToken}</code></p> : null)}</div>)}</div>}
       </section>
     </div>
   );

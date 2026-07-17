@@ -7,6 +7,31 @@ datasource db {
   url      = env("PRISMA_DATABASE_URL")
 }
 
+enum Sport {
+  FOOTBALL
+  RUGBY
+  GAA
+  GOLF
+  OTHER
+}
+
+enum ConsentPurpose {
+  CORE_PII
+  LEADERBOARD_HISTORY
+  MARKETING
+  ANALYTICS
+}
+
+enum DataRequestType {
+  EXPORT
+  DELETE
+}
+
+enum DataRequestStatus {
+  PENDING
+  COMPLETED
+}
+
 enum CompetitionStatus {
   DRAFT
   ACTIVE
@@ -123,9 +148,39 @@ model CompetitionMember {
   @@index([userId])
 }
 
+model League {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  sport          Sport           @default(FOOTBALL)
+  region         String?
+  seasonLabel    String?
+  createdAt      DateTime        @default(now())
+  teams          Team[]
+  sourceFixtures SourceFixture[]
+  seasons        Season[]
+
+  @@unique([name, seasonLabel])
+}
+
+model SourceFixture {
+  id         String   @id @default(uuid()) @db.Uuid
+  leagueId   String   @db.Uuid
+  matchweek  Int
+  homeTeamId String   @db.Uuid
+  awayTeamId String   @db.Uuid
+  kickoffAt  DateTime
+  league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  homeTeam   Team     @relation("SourceHome", fields: [homeTeamId], references: [id], onDelete: Cascade)
+  awayTeam   Team     @relation("SourceAway", fields: [awayTeamId], references: [id], onDelete: Cascade)
+
+  @@index([leagueId, matchweek])
+  @@index([leagueId, kickoffAt])
+}
+
 model Season {
   id                  String        @id @default(uuid()) @db.Uuid
   competitionId       String        @db.Uuid
+  leagueId            String?       @db.Uuid
   name                String
   slug                String
   rules               Json
@@ -137,6 +192,7 @@ model Season {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   competition         Competition   @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  league              League?       @relation(fields: [leagueId], references: [id], onDelete: SetNull)
   gameweeks           Gameweek[]
   entries             Entry[]
   payments            Payment[]
@@ -152,15 +208,47 @@ model Participant {
   name          String
   email         String?
   phone         String?
+  club          String?
+  location      String?
+  inviteToken   String?      @unique
+  confirmedAt   DateTime?
+  anonymisedAt  DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   competition   Competition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   entries       Entry[]
   payments      Payment[]
+  consents      ConsentRecord[]
+  dataRequests  DataRequest[]
 
   @@index([competitionId, name])
   @@index([userId])
+}
+
+model ConsentRecord {
+  id            String         @id @default(uuid()) @db.Uuid
+  participantId String         @db.Uuid
+  purpose       ConsentPurpose
+  policyVersion String
+  grantedAt     DateTime       @default(now())
+  revokedAt     DateTime?
+  participant   Participant    @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId, purpose])
+}
+
+model DataRequest {
+  id            String            @id @default(uuid()) @db.Uuid
+  participantId String?           @db.Uuid
+  email         String?
+  type          DataRequestType
+  status        DataRequestStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  completedAt   DateTime?
+  participant   Participant?      @relation(fields: [participantId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
 }
 
 model Entry {
@@ -169,6 +257,7 @@ model Entry {
   participantId      String       @db.Uuid
   number             Int
   status             EntryStatus  @default(PENDING_PAYMENT)
+  buyBackCount       Int          @default(0)
   eliminatedGameweekId String?    @db.Uuid
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -220,16 +309,21 @@ model Gameweek {
 
 model Team {
   id          String    @id @default(uuid()) @db.Uuid
+  leagueId    String?   @db.Uuid
   name        String
   shortName   String?
   externalId  String?
   createdAt   DateTime  @default(now())
+  league      League?   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   homeFixtures Fixture[] @relation("HomeTeam")
   awayFixtures Fixture[] @relation("AwayTeam")
+  sourceHome  SourceFixture[] @relation("SourceHome")
+  sourceAway  SourceFixture[] @relation("SourceAway")
   picks       Pick[]
 
   @@unique([name])
   @@unique([externalId])
+  @@index([leagueId])
 }
 
 model Fixture {

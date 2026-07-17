@@ -64,6 +64,33 @@ const sections = [
     ),
   },
   {
+    id: "buy-backs",
+    title: "Buy-backs and voided rounds",
+    content: (
+      <ul className="list-inside list-disc space-y-1.5 text-gray-700">
+        <li>
+          If the organiser has enabled buy-backs, an eliminated entry can pay the entry fee again (offline,
+          to the organiser) to rejoin — normally once per entry. The extra fee goes into the pot.
+        </li>
+        <li>
+          The organiser may void a round (for example when fixtures are postponed). A voided round counts as
+          a bye: nobody is eliminated and picks made that round are returned.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "your-data",
+    title: "Your data",
+    content: (
+      <p className="text-gray-700">
+        You confirm your own entry and consent to your name, email and picks being stored and shown in the
+        competition. You can download or delete your data at any time from your account page. See the privacy
+        policy and disclaimer linked in the footer.
+      </p>
+    ),
+  },
+  {
     id: "disputes",
     title: "Disputes",
     content: (

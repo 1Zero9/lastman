@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
@@ -54,6 +55,16 @@ export default async function RootLayout({
           <Nav isAuthenticated={Boolean(session?.user)} />
         </header>
         <main className="mx-auto max-w-6xl px-4 py-6 pb-24 md:py-8 md:pb-8">{children}</main>
+        <footer className="mx-auto max-w-6xl px-4 pb-28 md:pb-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-xs text-text-secondary">
+            <p>Unofficial fundraising tool · money is handled offline by your organiser · v{APP_VERSION}</p>
+            <div className="flex gap-4">
+              <Link href="/privacy" className="font-semibold hover:text-primary">Privacy</Link>
+              <Link href="/disclaimer" className="font-semibold hover:text-primary">Disclaimer</Link>
+              <Link href="/rules" className="font-semibold hover:text-primary">Rules</Link>
+            </div>
+          </div>
+        </footer>
       </body>
     </html>
   );

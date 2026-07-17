@@ -1,7 +1,21 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
-type Rules = { noTeamRepeats?: boolean; restrictedTeamGroup?: string[] };
+type Rules = {
+  noTeamRepeats?: boolean;
+  restrictedTeamGroup?: string[];
+  format?: { mode?: "survival" | "ranked_out" };
+  buyBack?: { enabled?: boolean; maxPerEntry?: number };
+};
+
+export function formatMode(rules: Rules) {
+  return rules.format?.mode ?? "survival";
+}
+
+function assertSupportedFormat(rules: Rules) {
+  const mode = formatMode(rules);
+  if (mode !== "survival") throw new Error(`The "${mode}" format is not supported yet. Only "survival" competitions can be settled.`);
+}
 
 export async function eligibleTeamIds(db: Db, entryId: string, gameweekId: string, rules: Rules) {
   const [fixtures, history] = await Promise.all([
@@ -26,6 +40,7 @@ export async function lockGameweek(db: Db, gameweekId: string, actorId?: string)
   });
   if (gameweek.status !== "OPEN") throw new Error("Only an open gameweek can be locked.");
   const rules = gameweek.season.rules as Rules;
+  assertSupportedFormat(rules);
   const activeEntries = await db.entry.findMany({ where: { seasonId: gameweek.seasonId, status: "ACTIVE" }, select: { id: true } });
   const existing = await db.pick.findMany({ where: { gameweekId }, select: { entryId: true, teamId: true } });
   const picked = new Set(existing.map((pick) => pick.entryId));
@@ -52,6 +67,7 @@ export async function lockGameweek(db: Db, gameweekId: string, actorId?: string)
 export async function settleGameweek(db: Db, gameweekId: string, actorId?: string) {
   const gameweek = await db.gameweek.findUniqueOrThrow({ where: { id: gameweekId }, include: { season: { include: { competition: true } }, fixtures: true } });
   if (gameweek.status !== "LOCKED" || gameweek.fixtures.some((fixture) => fixture.status !== "FINISHED")) throw new Error("All fixtures must be finished before settlement.");
+  assertSupportedFormat(gameweek.season.rules as Rules);
   const picks = await db.pick.findMany({ where: { gameweekId }, include: { entry: true } });
   const fixtures = gameweek.fixtures;
   const defeated: string[] = [];
@@ -72,4 +88,27 @@ export async function settleGameweek(db: Db, gameweekId: string, actorId?: strin
   await db.gameweek.update({ where: { id: gameweek.id }, data: { status: "SETTLED" } });
   await db.auditEvent.create({ data: { competitionId: gameweek.season.competitionId, actorId, type: "gameweek.settled", entityType: "Gameweek", entityId: gameweek.id, payload: { eliminated: defeated.length, wipeout } } });
   return { eliminated: defeated.length, wipeout };
+}
+
+export async function voidGameweek(db: Db, gameweekId: string, actorId?: string) {
+  const gameweek = await db.gameweek.findUniqueOrThrow({ where: { id: gameweekId }, include: { season: true } });
+  if (!["OPEN", "LOCKED"].includes(gameweek.status)) throw new Error("Only an open or locked gameweek can be voided.");
+  const voided = await db.pick.updateMany({ where: { gameweekId }, data: { outcome: "VOID" } });
+  await db.gameweek.update({ where: { id: gameweek.id }, data: { status: "CANCELLED" } });
+  await db.auditEvent.create({ data: { competitionId: gameweek.season.competitionId, actorId, type: "gameweek.voided", entityType: "Gameweek", entityId: gameweek.id, payload: { voidedPicks: voided.count } } });
+  return { voidedPicks: voided.count };
+}
+
+export async function buyBackEntry(db: Db, entryId: string, competitionId: string, actorId?: string) {
+  const entry = await db.entry.findFirstOrThrow({ where: { id: entryId, season: { competitionId } }, include: { season: { include: { competition: true } } } });
+  const rules = entry.season.rules as Rules;
+  if (!rules.buyBack?.enabled) throw new Error("Buy-back is not enabled for this season.");
+  if (entry.status !== "ELIMINATED") throw new Error("Only an eliminated entry can buy back in.");
+  if (entry.season.status === "COMPLETED") throw new Error("The season has already finished.");
+  const max = rules.buyBack.maxPerEntry ?? 1;
+  if (entry.buyBackCount >= max) throw new Error("This entry has used all of its buy-backs.");
+  await db.entry.update({ where: { id: entry.id }, data: { status: "ACTIVE", eliminatedGameweekId: null, buyBackCount: { increment: 1 } } });
+  await db.payment.create({ data: { seasonId: entry.seasonId, participantId: entry.participantId, amountCents: entry.season.competition.entryFeeCents, entryCount: 0, status: "CONFIRMED", receivedAt: new Date(), notes: `Buy-back for entry #${entry.number}` } });
+  await db.auditEvent.create({ data: { competitionId, actorId, type: "entry.buyback", entityType: "Entry", entityId: entry.id, payload: { buyBackCount: entry.buyBackCount + 1 } } });
+  return { entryNumber: entry.number };
 }

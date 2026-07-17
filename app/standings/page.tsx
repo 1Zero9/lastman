@@ -1,178 +1,103 @@
-"use client";
+import { getPotSummary, getPublicSeason } from "@/lib/competition";
+import { prisma } from "@/lib/prisma";
+import { PotSummary } from "@/components/PotSummary";
 
-import { useMemo, useState } from "react";
-import { entries } from "@/data/entries";
-import { StatusBadge } from "@/components/StatusBadge";
-import type { Entry } from "@/types/lms";
+export const dynamic = "force-dynamic";
 
-type SortKey = "id" | "entrantName" | "playerName" | "GW1" | "status";
+const statusStyles: Record<string, string> = {
+  ACTIVE: "bg-success/10 text-success",
+  ELIMINATED: "bg-error/10 text-error",
+  WINNER: "bg-accent/20 text-nav",
+  PENDING_PAYMENT: "bg-warning/10 text-warning",
+  VOID: "bg-border text-text-secondary",
+};
 
-function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
-  if (!active) return <span className="ml-1 opacity-25">↕</span>;
-  return <span className="ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
-}
+export default async function StandingsPage() {
+  const context = await getPublicSeason();
+  if (!context) {
+    return <div className="rounded-2xl bg-surface p-8 text-text-secondary ring-1 ring-border">No competition is running yet. Check back soon.</div>;
+  }
+  const { competition, season } = context;
 
-export default function StandingsPage() {
-  const [playerFilter, setPlayerFilter] = useState("");
-  const [teamFilter, setTeamFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "eliminated">("all");
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("id");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [pot, entries, revealedGameweeks] = await Promise.all([
+    getPotSummary(season.id, competition),
+    prisma.entry.findMany({
+      where: { seasonId: season.id, status: { not: "VOID" } },
+      include: {
+        participant: { select: { name: true, confirmedAt: true, anonymisedAt: true } },
+        picks: { include: { team: { select: { shortName: true, name: true } } } },
+      },
+      orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.gameweek.findMany({
+      where: { seasonId: season.id, status: { in: ["LOCKED", "SETTLED", "CANCELLED"] } },
+      orderBy: { number: "asc" },
+      select: { id: true, number: true, status: true },
+    }),
+  ]);
 
-  const players = useMemo(() => {
-    const set = new Set(entries.map((e) => e.playerName));
-    return Array.from(set).sort();
-  }, []);
-
-  const teams = useMemo(() => {
-    const set = new Set(entries.map((e) => e.picks.GW1).filter(Boolean));
-    return Array.from(set).sort();
-  }, []);
-
-  const filtered = useMemo(() => {
-    let list = [...entries];
-    if (playerFilter) list = list.filter((e) => e.playerName === playerFilter);
-    if (teamFilter) list = list.filter((e) => e.picks.GW1 === teamFilter);
-    if (statusFilter !== "all") list = list.filter((e) => e.status === statusFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter(
-        (e) =>
-          e.entrantName.toLowerCase().includes(q) ||
-          e.playerName.toLowerCase().includes(q)
-      );
-    }
-    const getSortVal = (e: Entry): string | number => {
-      if (sortKey === "id") return e.id;
-      if (sortKey === "GW1") return e.picks.GW1 ?? "";
-      if (sortKey === "entrantName") return e.entrantName;
-      if (sortKey === "playerName") return e.playerName;
-      return e.status;
-    };
-    list.sort((a, b) => {
-      const aVal = getSortVal(a);
-      const bVal = getSortVal(b);
-      const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return list;
-  }, [playerFilter, teamFilter, statusFilter, search, sortKey, sortDir]);
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("asc"); }
-  };
-
-  const selectClass = "rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none transition focus:border-rvr-maroon focus:bg-white";
+  const alive = entries.filter((entry) => entry.status === "ACTIVE" || entry.status === "WINNER").length;
 
   return (
     <div className="space-y-6">
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Standings</h1>
-        <span className="text-sm text-gray-500">
-          {filtered.length} of {entries.length} entries
-        </span>
-      </div>
-
-      {/* Filters */}
-      <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-        <div className="flex flex-wrap gap-3">
-          <div className="flex min-w-48 flex-1 flex-col gap-1">
-            <label htmlFor="search" className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Search
-            </label>
-            <input
-              id="search"
-              type="text"
-              placeholder="Entrant or coordinator…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={selectClass}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="player" className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Coordinator
-            </label>
-            <select id="player" value={playerFilter} onChange={(e) => setPlayerFilter(e.target.value)} className={selectClass}>
-              <option value="">All</option>
-              {players.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="team" className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              GW1 team
-            </label>
-            <select id="team" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className={selectClass}>
-              <option value="">All</option>
-              {teams.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="status" className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Status
-            </label>
-            <select id="status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className={selectClass}>
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="eliminated">Out</option>
-            </select>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Standings</h1>
+          <p className="mt-1 text-sm text-text-secondary">{competition.name} · {season.name}{season.league ? ` · ${season.league.name}` : ""}</p>
         </div>
+        <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{alive} of {entries.length} still standing</span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl shadow-sm ring-1 ring-gray-200">
-        <table className="min-w-full divide-y divide-gray-100 text-left text-sm">
+      <PotSummary {...pot} />
+
+      <div className="overflow-x-auto rounded-2xl shadow-sm ring-1 ring-border">
+        <table className="min-w-full divide-y divide-border text-left text-sm">
           <thead>
-            <tr className="bg-rvr-maroon text-white">
-              {(
-                [
-                  { key: "id", label: "#" },
-                  { key: "entrantName", label: "Entrant" },
-                  { key: "playerName", label: "Coordinator" },
-                  { key: "GW1", label: "GW1 pick" },
-                  { key: "status", label: "Status" },
-                ] as { key: SortKey; label: string }[]
-              ).map(({ key, label }) => (
-                <th
-                  key={key}
-                  className="cursor-pointer select-none px-4 py-3 font-semibold hover:bg-white/10"
-                  onClick={() => handleSort(key)}
-                >
-                  {label}
-                  <SortIcon active={sortKey === key} dir={sortDir} />
-                </th>
+            <tr className="bg-nav text-white">
+              <th className="px-4 py-3 font-semibold">Entrant</th>
+              <th className="px-4 py-3 font-semibold">Entry</th>
+              {revealedGameweeks.map((gameweek) => (
+                <th key={gameweek.id} className="px-3 py-3 text-center font-semibold">R{gameweek.number}</th>
               ))}
+              <th className="px-4 py-3 font-semibold">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50 bg-white">
-            {filtered.map((entry) => (
-              <tr
-                key={entry.id}
-                className={`transition-colors ${
-                  entry.status === "eliminated"
-                    ? "bg-red-50/50 hover:bg-red-50"
-                    : "hover:bg-gray-50"
-                }`}
-              >
-                <td className="px-4 py-3 font-mono text-xs text-gray-400">{entry.id}</td>
-                <td className={`px-4 py-3 font-medium ${entry.status === "eliminated" ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                  {entry.entrantName}
-                </td>
-                <td className="px-4 py-3 text-gray-500">{entry.playerName}</td>
-                <td className="px-4 py-3 font-medium text-gray-700">{entry.picks.GW1 ?? "–"}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={entry.status} />
-                </td>
-              </tr>
-            ))}
+          <tbody className="divide-y divide-border bg-surface">
+            {entries.length === 0 && (
+              <tr><td colSpan={3 + revealedGameweeks.length} className="px-4 py-6 text-text-secondary">No entries yet.</td></tr>
+            )}
+            {entries.map((entry) => {
+              const eliminated = entry.status === "ELIMINATED";
+              const displayName = entry.participant.anonymisedAt
+                ? "Removed entrant"
+                : entry.participant.confirmedAt
+                  ? entry.participant.name
+                  : `${entry.participant.name} (unconfirmed)`;
+              return (
+                <tr key={entry.id} className={eliminated ? "bg-error/5" : undefined}>
+                  <td className={`px-4 py-3 font-medium ${eliminated ? "text-text-secondary line-through" : "text-text"}`}>{displayName}</td>
+                  <td className="px-4 py-3 text-text-secondary">#{entry.number}{entry.buyBackCount > 0 ? " · buy-back" : ""}</td>
+                  {revealedGameweeks.map((gameweek) => {
+                    const pick = entry.picks.find((item) => item.gameweekId === gameweek.id);
+                    const outcomeClass = pick?.outcome === "WIN" ? "text-success" : pick?.outcome === "PENDING" ? "text-text" : pick?.outcome === "VOID" ? "text-text-secondary" : "text-error";
+                    return (
+                      <td key={gameweek.id} className={`px-3 py-3 text-center font-medium ${outcomeClass}`}>
+                        {pick ? pick.team.shortName ?? pick.team.name : "–"}
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[entry.status] ?? "bg-border text-text-secondary"}`}>
+                      {entry.status.toLowerCase().replace("_", " ")}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-
+      <p className="text-xs text-text-secondary">Picks are revealed once a round locks. Entrants appear after they confirm their entry.</p>
     </div>
   );
 }

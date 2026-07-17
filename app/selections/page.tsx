@@ -1,75 +1,75 @@
-"use client";
+import { getPublicSeason } from "@/lib/competition";
+import { prisma } from "@/lib/prisma";
 
-import { useState } from "react";
-import { selectionCountsByGw, gameWeekIds } from "@/data/selectionCounts";
+export const dynamic = "force-dynamic";
 
-const MAX_COUNT = Math.max(
-  ...gameWeekIds.flatMap((id) => selectionCountsByGw[id].map((s) => s.count))
-);
+export default async function SelectionsPage() {
+  const context = await getPublicSeason();
+  if (!context) {
+    return <div className="rounded-2xl bg-surface p-8 text-text-secondary ring-1 ring-border">No competition is running yet. Check back soon.</div>;
+  }
+  const { competition, season } = context;
 
-export default function SelectionsPage() {
-  const [selectedGwId, setSelectedGwId] = useState(gameWeekIds[0] ?? "GW1");
-  const counts = selectionCountsByGw[selectedGwId] ?? [];
-  const total = counts.reduce((sum, s) => sum + s.count, 0);
+  const gameweeks = await prisma.gameweek.findMany({
+    where: { seasonId: season.id, status: { in: ["LOCKED", "SETTLED"] } },
+    orderBy: { number: "asc" },
+    select: { id: true, number: true, name: true },
+  });
+
+  const picks = gameweeks.length
+    ? await prisma.pick.groupBy({
+        by: ["gameweekId", "teamId"],
+        where: { gameweekId: { in: gameweeks.map((gameweek) => gameweek.id) } },
+        _count: { _all: true },
+      })
+    : [];
+
+  const teamIds = [...new Set(picks.map((pick) => pick.teamId))];
+  const teams = teamIds.length
+    ? await prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, name: true } })
+    : [];
+  const teamName = new Map(teams.map((team) => [team.id, team.name]));
 
   return (
     <div className="space-y-6">
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Selections</h1>
-        <span className="rounded-full bg-rvr-maroon-muted px-3 py-1 text-xs font-semibold text-rvr-maroon">
-          {total} total picks
-        </span>
+      <div>
+        <h1 className="text-2xl font-bold text-text">Selections</h1>
+        <p className="mt-1 text-sm text-text-secondary">{competition.name} · {season.name} · pick counts are published after each round locks.</p>
       </div>
 
-      {gameWeekIds.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {gameWeekIds.map((id) => (
-            <button
-              key={id}
-              onClick={() => setSelectedGwId(id)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition-all ${
-                selectedGwId === id
-                  ? "bg-rvr-maroon text-white shadow-sm"
-                  : "bg-white text-gray-600 ring-1 ring-gray-200 hover:ring-rvr-maroon"
-              }`}
-            >
-              {id}
-            </button>
-          ))}
-        </div>
-      )}
+      {gameweeks.length === 0 && <div className="rounded-2xl bg-surface p-8 text-text-secondary ring-1 ring-border">No rounds have locked yet. Selections stay hidden until the deadline passes.</div>}
 
-      <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-        <div className="space-y-4">
-          {counts.map(({ team, count }) => {
-            const pct = Math.round((count / total) * 100);
-            const barWidth = Math.max(2, (count / MAX_COUNT) * 100);
-            return (
-              <div key={team} className="flex items-center gap-4">
-                <div className="w-28 shrink-0 text-sm font-semibold text-gray-800">{team}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="h-7 overflow-hidden rounded-lg bg-gray-100">
-                    <div
-                      className="flex h-full items-center justify-end rounded-lg bg-gradient-to-r from-rvr-maroon to-rvr-maroon-light px-2 transition-all"
-                      style={{ width: `${barWidth}%` }}
-                    >
-                      {barWidth > 20 && (
-                        <span className="text-xs font-bold text-white">{count}</span>
-                      )}
+      {gameweeks.map((gameweek) => {
+        const rows = picks
+          .filter((pick) => pick.gameweekId === gameweek.id)
+          .map((pick) => ({ team: teamName.get(pick.teamId) ?? "Unknown", count: pick._count._all }))
+          .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
+        const total = rows.reduce((sum, row) => sum + row.count, 0);
+        const max = rows[0]?.count ?? 1;
+        return (
+          <section key={gameweek.id} className="rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-text">{gameweek.name}</h2>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{total} picks</span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {rows.map((row) => (
+                <div key={row.team} className="flex items-center gap-4">
+                  <div className="w-40 shrink-0 truncate text-sm font-semibold text-text">{row.team}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="h-6 overflow-hidden rounded-lg bg-background">
+                      <div className="flex h-full items-center justify-end rounded-lg bg-primary px-2" style={{ width: `${Math.max(4, (row.count / max) * 100)}%` }}>
+                        <span className="text-xs font-bold text-white">{row.count}</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="w-12 shrink-0 text-right text-xs text-text-secondary">{total ? Math.round((row.count / total) * 100) : 0}%</div>
                 </div>
-                <div className="w-20 shrink-0 text-right">
-                  <span className="text-sm font-semibold text-gray-700">{count}</span>
-                  <span className="ml-1 text-xs text-gray-400">{pct}%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
