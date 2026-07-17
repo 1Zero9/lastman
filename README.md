@@ -21,7 +21,8 @@ Open [http://localhost:3000](http://localhost:3000).
 Set `PRISMA_DATABASE_URL` in `.env.local` and in Vercel. It must be a PostgreSQL connection string and
 must never use a `NEXT_PUBLIC_` prefix.
 
-Set `AUTH_SECRET` to a long random secret in both places (`openssl rand -base64 32`). Authentication is
+Set `AUTH_SECRET` to a long random secret in both places (`openssl rand -base64 32`). The application
+passes this value directly to NextAuth; it is required in Vercel at runtime. Authentication is
 invite-only: public sign-up is deliberately unavailable. Create the first account locally with
 `BOOTSTRAP_USER_EMAIL`, `BOOTSTRAP_USER_PASSWORD` (12+ characters), and optionally `BOOTSTRAP_USER_NAME`,
 then run `npm run user:create`.
