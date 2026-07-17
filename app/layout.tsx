@@ -5,6 +5,8 @@ import { Nav } from "@/components/Nav";
 import { HeaderLogo } from "@/components/HeaderLogo";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { APP_NAME, APP_VERSION } from "@/lib/app-info";
+import { PwaRegister } from "@/components/PwaRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,8 +19,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Last Man Standing",
+  title: APP_NAME,
   description: "A fundraising competition platform.",
+  applicationName: APP_NAME,
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/lms-logo.png", type: "image/png" }],
+    apple: [{ url: "/lms-logo.png", type: "image/png" }],
+  },
 };
 
 export default async function RootLayout({
@@ -30,6 +38,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}>
+        <PwaRegister />
         <header className="sticky top-0 z-30 border-b border-white/10 bg-nav/95 shadow-lg backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
             <HeaderLogo />
@@ -38,7 +47,7 @@ export default async function RootLayout({
                 Last Man Standing
               </h1>
               <p className="mt-0.5 hidden text-xs text-white/55 sm:block">
-                Fundraising competition platform
+                Fundraising competition platform · v{APP_VERSION}
               </p>
             </div>
           </div>
