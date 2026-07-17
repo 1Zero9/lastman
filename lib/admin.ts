@@ -9,6 +9,13 @@ export async function requireSignedInUser() {
   return session.user;
 }
 
+export async function requirePlatformAccess() {
+  const user = await requireSignedInUser();
+  const platformUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { platformRole: true, email: true, displayName: true, id: true } });
+  if (!['PLATFORM_ADMIN', 'BREAKGLASS_SUPPORT'].includes(platformUser.platformRole)) redirect('/account');
+  return platformUser;
+}
+
 export async function getAdminContext() {
   const user = await requireSignedInUser();
   const membership = await prisma.competitionMember.findFirst({

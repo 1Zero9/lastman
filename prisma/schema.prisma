@@ -28,6 +28,12 @@ enum MemberRole {
   VIEWER
 }
 
+enum PlatformRole {
+  MEMBER
+  PLATFORM_ADMIN
+  BREAKGLASS_SUPPORT
+}
+
 enum EntryStatus {
   PENDING_PAYMENT
   ACTIVE
@@ -77,6 +83,7 @@ model User {
   email          String              @unique
   displayName    String?
   passwordHash   String?
+  platformRole   PlatformRole        @default(MEMBER)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   memberships    CompetitionMember[]

@@ -51,6 +51,7 @@ export function Nav({ isAuthenticated }: { isAuthenticated: boolean }) {
               >
                 Admin
               </Link>
+              <Link href="/platform" className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${pathname === "/platform" ? "bg-white text-primary shadow-sm" : "text-white/65 hover:bg-white/10 hover:text-white"}`}>Platform</Link>
               <SignOutButton />
             </>
           ) : (

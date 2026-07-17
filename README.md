@@ -27,6 +27,10 @@ invite-only: public sign-up is deliberately unavailable. Create the first accoun
 `BOOTSTRAP_USER_EMAIL`, `BOOTSTRAP_USER_PASSWORD` (12+ characters), and optionally `BOOTSTRAP_USER_NAME`,
 then run `npm run user:create`.
 
+For the platform owner account, also set `BOOTSTRAP_USER_ROLE=PLATFORM_ADMIN`. A separate recovery-only
+account may use `BREAKGLASS_SUPPORT`; it can provision or recover organiser access but is deliberately
+blocked from participant names, contact details, entries, and picks.
+
 Set a separate random `CRON_SECRET` in Vercel. The included hourly Vercel Cron request locks overdue open
 gameweeks and assigns eligibility-aware autopicks. Vercel sends this secret to the cron endpoint.
 
