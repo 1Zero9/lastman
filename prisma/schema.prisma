@@ -124,6 +124,10 @@ model Competition {
   currency             String              @default("EUR") @db.Char(3)
   timezone             String              @default("Europe/Dublin")
   entryFeeCents        Int                 @default(1000)
+  clubName             String?
+  clubWebsite          String?
+  clubColor            String?
+  welcomeMessage       String?
   prizePercentage      Int                 @default(30)
   fundraisingPercentage Int                @default(70)
   status               CompetitionStatus  @default(DRAFT)
@@ -212,6 +216,7 @@ model Participant {
   location      String?
   inviteToken   String?      @unique
   confirmedAt   DateTime?
+  approvedAt    DateTime?
   anonymisedAt  DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt

@@ -6,6 +6,8 @@ import { Nav } from "@/components/Nav";
 import { HeaderLogo } from "@/components/HeaderLogo";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { buildClubTheme } from "@/lib/club-theme";
 import { APP_NAME, APP_VERSION } from "@/lib/app-info";
 import { PwaRegister } from "@/components/PwaRegister";
 
@@ -36,9 +38,35 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getServerSession(authOptions);
+  let isOrganiser = false;
+  let isPlatform = false;
+  let clubColor: string | null = null;
+  if (session?.user?.id) {
+    const [membership, platformUser, participant] = await Promise.all([
+      prisma.competitionMember.findFirst({
+        where: { userId: session.user.id, role: { in: ["OWNER", "ADMIN"] }, competition: { status: { not: "ARCHIVED" } } },
+        select: { competition: { select: { status: true, clubColor: true } } },
+      }),
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { platformRole: true } }),
+      prisma.participant.findFirst({
+        where: { userId: session.user.id, anonymisedAt: null, competition: { status: "ACTIVE" } },
+        orderBy: { createdAt: "desc" },
+        select: { competition: { select: { clubColor: true } } },
+      }),
+    ]);
+    isOrganiser = Boolean(membership);
+    isPlatform = ["PLATFORM_ADMIN", "BREAKGLASS_SUPPORT"].includes(platformUser?.platformRole ?? "");
+    clubColor =
+      participant?.competition.clubColor ??
+      (membership?.competition.status === "ACTIVE" ? membership.competition.clubColor : null);
+  }
+  const clubTheme = clubColor ? buildClubTheme(clubColor) : null;
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
+        style={(clubTheme as React.CSSProperties | null) ?? undefined}
+      >
         <PwaRegister />
         <header className="sticky top-0 z-30 border-b border-white/10 bg-nav/95 shadow-lg backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
@@ -52,7 +80,7 @@ export default async function RootLayout({
               </p>
             </div>
           </div>
-          <Nav isAuthenticated={Boolean(session?.user)} />
+          <Nav isAuthenticated={Boolean(session?.user)} isOrganiser={isOrganiser} isPlatform={isPlatform} />
         </header>
         <main className="mx-auto max-w-6xl px-4 py-6 pb-24 md:py-8 md:pb-8">{children}</main>
         <footer className="mx-auto max-w-6xl px-4 pb-28 md:pb-10">

@@ -109,6 +109,31 @@ async function recordBuyBack(formData: FormData) {
   revalidatePath("/my-entries");
 }
 
+async function approveParticipant(formData: FormData) {
+  "use server";
+
+  const { user, competition } = await getAdminContext();
+  const participantId = String(formData.get("participantId") ?? "");
+  const approve = String(formData.get("action") ?? "") === "approve";
+  const participant = await prisma.participant.findFirst({ where: { id: participantId, competitionId: competition.id, anonymisedAt: null } });
+  if (!participant) throw new Error("Participant not found.");
+  if (approve && !participant.confirmedAt) throw new Error("The player must confirm their entry before approval.");
+  await prisma.$transaction([
+    prisma.participant.update({ where: { id: participant.id }, data: { approvedAt: approve ? new Date() : null } }),
+    prisma.auditEvent.create({
+      data: {
+        competitionId: competition.id,
+        actorId: user.id,
+        type: approve ? "participant.approved" : "participant.approval_revoked",
+        entityType: "Participant",
+        entityId: participant.id,
+      },
+    }),
+  ]);
+  revalidatePath("/admin/people");
+  revalidatePath("/my-entries");
+}
+
 function formatMoney(cents: number, currency: string) {
   return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(cents / 100);
 }
@@ -169,7 +194,7 @@ export default async function PeoplePage() {
 
       <section className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border">
         <div className="border-b border-border px-6 py-5"><h2 className="text-lg font-bold text-text">People and entries</h2></div>
-        {participants.length === 0 ? <p className="px-6 py-8 text-sm text-text-secondary">No people added yet.</p> : <div className="divide-y divide-border">{participants.map((participant) => <div key={participant.id} className="px-6 py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><div><p className="font-semibold text-text">{participant.name}{participant.anonymisedAt ? " (removed)" : ""}</p>{participant.email && <p className="text-sm text-text-secondary">{participant.email}</p>}</div><div className="flex flex-wrap items-center gap-2">{participant.entries.map((entry) => <span key={entry.id} className="flex items-center gap-1"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entryBadge[entry.status] ?? "bg-border text-text-secondary"}`}>#{entry.number} · {entry.status.toLowerCase().replace("_", " ")}{entry.buyBackCount > 0 ? " · bought back" : ""}</span>{buyBackEnabled && entry.status === "ELIMINATED" && <form action={recordBuyBack}><input type="hidden" name="entryId" value={entry.id} /><button className="rounded-lg bg-nav px-2.5 py-1 text-xs font-semibold text-white" title={`Record an offline buy-back payment of ${formatMoney(competition.entryFeeCents, competition.currency)}`}>Buy back</button></form>}</span>)}</div></div>{!participant.anonymisedAt && (participant.confirmedAt ? <p className="mt-2 text-xs font-semibold text-success">Confirmed by entrant on {participant.confirmedAt.toLocaleDateString("en-IE")}</p> : participant.inviteToken ? <p className="mt-2 text-xs text-text-secondary">Awaiting confirmation — share this link: <code className="select-all rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-text">{baseUrl}/confirm/{participant.inviteToken}</code></p> : null)}</div>)}</div>}
+        {participants.length === 0 ? <p className="px-6 py-8 text-sm text-text-secondary">No people added yet.</p> : <div className="divide-y divide-border">{participants.map((participant) => <div key={participant.id} className="px-6 py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><div><p className="font-semibold text-text">{participant.name}{participant.anonymisedAt ? " (removed)" : ""}</p>{participant.email && <p className="text-sm text-text-secondary">{participant.email}</p>}</div><div className="flex flex-wrap items-center gap-2">{participant.entries.map((entry) => <span key={entry.id} className="flex items-center gap-1"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${entryBadge[entry.status] ?? "bg-border text-text-secondary"}`}>#{entry.number} · {entry.status.toLowerCase().replace("_", " ")}{entry.buyBackCount > 0 ? " · bought back" : ""}</span>{buyBackEnabled && entry.status === "ELIMINATED" && <form action={recordBuyBack}><input type="hidden" name="entryId" value={entry.id} /><button className="rounded-lg bg-nav px-2.5 py-1 text-xs font-semibold text-white" title={`Record an offline buy-back payment of ${formatMoney(competition.entryFeeCents, competition.currency)}`}>Buy back</button></form>}</span>)}</div></div>{!participant.anonymisedAt && (participant.confirmedAt ? <div className="mt-2 flex flex-wrap items-center gap-3"><p className="text-xs font-semibold text-success">Confirmed by entrant on {participant.confirmedAt.toLocaleDateString("en-IE")}</p><form action={approveParticipant} className="flex items-center gap-2"><input type="hidden" name="participantId" value={participant.id} /><input type="hidden" name="action" value={participant.approvedAt ? "revoke" : "approve"} />{participant.approvedAt ? <><span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">✓ Player approved {participant.approvedAt.toLocaleDateString("en-IE")}</span><button className="text-xs font-semibold text-text-secondary underline" title="Revoke approval">undo</button></> : <button className="rounded-lg bg-primary px-2.5 py-1 text-xs font-semibold text-white" title="Tick to approve this player — they will get the club welcome">Approve player</button>}</form></div> : participant.inviteToken ? <p className="mt-2 text-xs text-text-secondary">Awaiting confirmation — share this link: <code className="select-all rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-text">{baseUrl}/confirm/{participant.inviteToken}</code></p> : null)}</div>)}</div>}
       </section>
     </div>
   );

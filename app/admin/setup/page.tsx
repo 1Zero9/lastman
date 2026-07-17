@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { CompetitionStatus, SeasonStatus } from "@prisma/client";
 import { getAdminContext, moneyToCents, requireSignedInUser } from "@/lib/admin";
+import { detectClubColor } from "@/lib/club-theme";
 import { defaultRules, injectLeagueSchedule, makeSlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
 
@@ -17,6 +18,15 @@ async function createCompetition(formData: FormData) {
   const startDate = String(formData.get("startDate") ?? "");
   const endDate = String(formData.get("endDate") ?? "");
   const buyBackEnabled = formData.get("buyBack") === "on";
+  const clubName = String(formData.get("clubName") ?? "").trim() || null;
+  const clubWebsiteRaw = String(formData.get("clubWebsite") ?? "").trim();
+  const clubWebsite = clubWebsiteRaw ? (clubWebsiteRaw.startsWith("http") ? clubWebsiteRaw : `https://${clubWebsiteRaw}`) : null;
+  const clubColorRaw = String(formData.get("clubColor") ?? "").trim();
+  let clubColor = /^#[0-9a-fA-F]{6}$/.test(clubColorRaw) ? clubColorRaw : null;
+  if (clubWebsite && formData.get("autoTheme") === "on") {
+    clubColor = (await detectClubColor(clubWebsite)) ?? clubColor;
+  }
+  const welcomeMessage = String(formData.get("welcomeMessage") ?? "").trim() || null;
 
   if (!name || !seasonName || !/^[A-Z]{3}$/.test(currency) || !Number.isInteger(prizePercentage) || prizePercentage < 0 || prizePercentage > 100) {
     throw new Error("Enter a competition name, season name, valid currency and prize allocation.");
@@ -46,6 +56,10 @@ async function createCompetition(formData: FormData) {
           currency,
           timezone: "Europe/Dublin",
           entryFeeCents,
+          clubName,
+          clubWebsite,
+          clubColor,
+          welcomeMessage,
           prizePercentage,
           fundraisingPercentage: 100 - prizePercentage,
           status: CompetitionStatus.ACTIVE,
@@ -148,6 +162,30 @@ export default async function CompetitionSetupPage() {
           <label className="flex items-center gap-3 sm:col-span-2">
             <input name="buyBack" type="checkbox" className="h-5 w-5 rounded border-border accent-primary" />
             <span className="text-sm font-semibold text-text">Allow one buy-back per entry after elimination (extra fundraising)</span>
+          </label>
+          <div className="sm:col-span-2 border-t border-border pt-5">
+            <p className="text-sm font-bold text-text">Club branding (optional)</p>
+            <p className="mt-1 text-sm text-text-secondary">Approved players get a themed welcome from your club.</p>
+          </div>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-text">Club name</span>
+            <input name="clubName" placeholder="River Valley Rangers" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-text">Club website</span>
+            <input name="clubWebsite" type="text" placeholder="www.yourclub.ie" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-text">Club colour</span>
+            <input name="clubColor" type="color" defaultValue="#27AE60" className="h-[50px] w-full rounded-xl border border-border px-2 py-1" />
+          </label>
+          <label className="flex items-center gap-3 sm:col-span-2">
+            <input name="autoTheme" type="checkbox" defaultChecked className="h-5 w-5 rounded border-border accent-primary" />
+            <span className="text-sm text-text"><span className="font-semibold">Pick the colour from the club website automatically.</span> We read the site&apos;s theme colour; the colour above is used if nothing is found.</span>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1.5 block text-sm font-semibold text-text">Welcome message</span>
+            <textarea name="welcomeMessage" rows={2} placeholder="Thanks for backing the club — best of luck!" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
         </div>
         <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">Create competition & inject fixtures</button>
