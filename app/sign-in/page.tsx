@@ -19,9 +19,10 @@ export default async function SignInPage() {
           </div>
         </div>
         <SignInForm />
-        <p className="mt-6 text-center text-sm text-text-secondary">
-          Don&apos;t have an account? Ask your competition organiser for an invite.
-        </p>
+        <div className="mt-7 rounded-xl border border-primary/20 bg-primary/5 p-4 text-center">
+          <p className="text-base font-bold text-text">Don&apos;t have an account?</p>
+          <p className="mt-1 text-sm leading-5 text-text-secondary">Ask your competition organiser for an invite.</p>
+        </div>
       </section>
     </main>
   );
