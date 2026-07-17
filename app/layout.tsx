@@ -71,7 +71,7 @@ export default async function RootLayout({
         <PwaRegister />
         <header className="sticky top-0 z-30 border-b border-white/10 bg-nav/95 shadow-lg backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-            <HeaderLogo />
+            <HeaderLogo href={session?.user ? "/my-entries" : "/"} />
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-bold tracking-tight text-white md:text-xl">
                 Last Man Standing
