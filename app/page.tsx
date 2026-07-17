@@ -1,97 +1,20 @@
+import Image from "next/image";
 import Link from "next/link";
-import { gameWeeks } from "@/data/fixtures";
-import { entries, activeCount, eliminatedCount } from "@/data/entries";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 
-export default function HomePage() {
-  const gw = gameWeeks[0];
-  const totalEntries = entries.length;
+export default async function HomePage() {
+  const session = await getServerSession(authOptions);
+  if (session) redirect("/my-entries");
 
   return (
-    <div className="space-y-8">
-
-      {/* How it works */}
-      <section className="rounded-xl bg-gradient-to-br from-rvr-maroon to-rvr-maroon-light p-6 text-white shadow-md">
-        <h2 className="mb-3 text-lg font-bold">How it works</h2>
-        <p className="leading-relaxed text-white/85">
-          Pick one team each gameweek. If your team{" "}
-          <strong className="text-white">wins</strong>, you&apos;re through to the next round. Draw or
-          lose and you&apos;re <strong className="text-white">out</strong>. Entry is €10 per person — 30%
-          is allocated between the prize fund and the fundraiser. Competition-specific restrictions,
-          entry price and allocation are configured by an administrator for each season.
-        </p>
-        <Link
-          href="/rules"
-          className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-white/70 transition-colors hover:text-white"
-        >
-          Full rules →
-        </Link>
+    <div className="mx-auto max-w-lg overflow-hidden rounded-3xl bg-nav shadow-2xl shadow-nav/20">
+      <section className="relative px-7 pb-10 pt-12 text-center text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(39,174,96,0.35),transparent_52%)]" />
+        <div className="relative"><Image src="/lms-logo.png" alt="Last Man Standing" width={112} height={112} priority className="mx-auto rounded-3xl" /><p className="mt-7 text-xs font-bold uppercase tracking-[0.24em] text-accent">Fundraising competition</p><h1 className="mt-3 text-4xl font-extrabold leading-none">PLAY. SURVIVE.<br/><span className="text-secondary">STAND.</span></h1><p className="mx-auto mt-5 max-w-sm text-sm leading-6 text-white/65">One team. One pick. Keep winning to be the last entry standing.</p><Link href="/sign-in" className="mt-8 inline-flex rounded-xl bg-accent px-6 py-3 font-bold text-nav shadow-lg shadow-accent/20">Sign in to play</Link></div>
       </section>
-
-      {/* Stats */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="relative overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-gray-50" />
-          <p className="relative text-4xl font-extrabold text-gray-900">{totalEntries}</p>
-          <p className="relative mt-1 text-sm font-medium text-gray-500">Total entries</p>
-        </div>
-        <div className="relative overflow-hidden rounded-xl bg-rvr-maroon p-6 shadow-sm">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10" />
-          <p className="relative text-4xl font-extrabold text-white">{activeCount}</p>
-          <p className="relative mt-1 text-sm font-medium text-white/65">Still alive</p>
-        </div>
-        <div className="relative overflow-hidden rounded-xl bg-red-600 p-6 shadow-sm">
-          <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-white/10" />
-          <p className="relative text-4xl font-extrabold text-white">{eliminatedCount}</p>
-          <p className="relative mt-1 text-sm font-medium text-red-100">Eliminated in GW1</p>
-        </div>
-      </section>
-
-      {/* Current gameweek */}
-      <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <span className="mb-2 inline-block rounded-full bg-rvr-maroon-muted px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-rvr-maroon">
-              Current gameweek
-            </span>
-            <p className="font-semibold text-gray-900">{gw.label}</p>
-            <p className="mt-0.5 text-sm text-gray-500">Cut-off: {gw.cutOff}</p>
-          </div>
-          <Link
-            href="/fixtures"
-            className="shrink-0 rounded-lg bg-rvr-maroon px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rvr-maroon-dark"
-          >
-            View fixtures
-          </Link>
-        </div>
-      </section>
-
-      {/* Quick links */}
-      <section>
-        <h2 className="mb-4 text-lg font-bold text-gray-900">Quick links</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[
-            { href: "/fixtures", label: "Fixtures", desc: "Upcoming matches" },
-            { href: "/standings", label: "Standings", desc: "Live competition status" },
-            { href: "/selections", label: "Selections", desc: "Current selection summary" },
-            { href: "/rules", label: "Full rules", desc: "Rules for this competition" },
-          ].map(({ href, label, desc }) => (
-            <Link
-              key={href}
-              href={href}
-              className="group flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-100 transition-all hover:shadow-md hover:ring-rvr-maroon"
-            >
-              <div>
-                <p className="font-semibold text-gray-900 transition-colors group-hover:text-rvr-maroon">
-                  {label}
-                </p>
-                <p className="text-sm text-gray-500">{desc}</p>
-              </div>
-              <span className="text-gray-300 transition-colors group-hover:text-rvr-maroon">→</span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
+      <section className="grid grid-cols-3 border-t border-white/10 bg-white px-4 py-6 text-center text-nav"><div><p className="text-2xl text-primary">●</p><p className="mt-2 text-xs font-bold">MAKE A PICK</p></div><div><p className="text-2xl text-accent">♜</p><p className="mt-2 text-xs font-bold">STAY ALIVE</p></div><div><p className="text-2xl text-secondary">⌁</p><p className="mt-2 text-xs font-bold">FUND THE CAUSE</p></div></section>
     </div>
   );
 }
