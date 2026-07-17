@@ -1,12 +1,14 @@
-# Last Man Standing — RVR
+# Last Man Standing
 
-Invite-only Last Man Standing fundraising app for River Valley Rangers. Next.js + Supabase, deployable on Vercel.
+A reusable fundraising platform for Last Man Standing competitions. Payments happen outside the app;
+administrators record and confirm them in the dashboard. The app provides a live member view, entrant
+management, prize/fundraising totals, picks, results and an audit trail.
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env.local   # add your Supabase keys
+cp .env.example .env.local   # add your PostgreSQL connection
 npm run dev
 ```
 
@@ -14,18 +16,22 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Setup
 
-### 1. Supabase
+### 1. Database
 
-1. Create a project at [supabase.com](https://supabase.com).
-2. In **Project Settings → API** copy:
-   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
-   - anon public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. In **Authentication → URL Configuration** set:
-   - Site URL: `http://localhost:3000` (dev) or your Vercel URL (prod)
-   - Redirect URLs: add your app URLs for magic link callback
-4. Enable **Email** (and optionally **Phone**) under Authentication → Providers for magic link / SMS.
+Set `PRISMA_DATABASE_URL` in `.env.local` and in Vercel. It must be a PostgreSQL connection string and
+must never use a `NEXT_PUBLIC_` prefix.
 
-Put the values in `.env.local` (see `.env.example`).
+Generate the client and create migrations locally:
+
+```bash
+set -a; source .env.local; set +a
+npx prisma generate
+npx prisma migrate dev --name initial_schema
+```
+
+The initial migration is committed in `prisma/migrations`. For a production deployment, run
+`npm run prisma:deploy` with `PRISMA_DATABASE_URL` configured in that environment; do not use
+`migrate dev` against production.
 
 ### 2. GitHub
 
@@ -47,7 +53,7 @@ git push -u origin main
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 4. Deploy. Vercel will run `next build` and host the app.
-5. In Supabase, set **Site URL** and **Redirect URLs** to your Vercel URL (e.g. `https://lastman-xxx.vercel.app`) so magic links work in production.
+5. Add `PRISMA_DATABASE_URL` to Vercel. Run production migrations explicitly as part of deployment once the initial schema is approved.
 
 ## Docs
 
@@ -66,5 +72,5 @@ git push -u origin main
 ## Tech
 
 - **Next.js** (App Router), TypeScript, Tailwind
-- **Supabase** — Auth (magic link / SMS), DB (to be added)
+- **Prisma + PostgreSQL** — database access and migrations
 - **Vercel** — Hosting

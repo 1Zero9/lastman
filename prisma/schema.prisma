@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_DATABASE_URL")
+}
+
+enum CompetitionStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum SeasonStatus {
+  DRAFT
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum EntryStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  ELIMINATED
+  WINNER
+  VOID
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  REFUNDED
+}
+
+enum GameweekStatus {
+  DRAFT
+  OPEN
+  LOCKED
+  SETTLED
+  CANCELLED
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  FINISHED
+  POSTPONED
+  CANCELLED
+}
+
+enum PickMethod {
+  MEMBER
+  AUTOPICK
+  ADMIN
+}
+
+enum PickOutcome {
+  PENDING
+  WIN
+  DRAW
+  LOSS
+  VOID
+}
+
+model User {
+  id             String              @id @default(uuid()) @db.Uuid
+  email          String              @unique
+  displayName    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  memberships    CompetitionMember[]
+  participants   Participant[]
+  auditEvents    AuditEvent[]        @relation("AuditActor")
+}
+
+model Competition {
+  id                   String              @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String              @unique
+  description          String?
+  currency             String              @default("EUR") @db.Char(3)
+  timezone             String              @default("Europe/Dublin")
+  entryFeeCents        Int                 @default(1000)
+  prizePercentage      Int                 @default(30)
+  fundraisingPercentage Int                @default(70)
+  status               CompetitionStatus  @default(DRAFT)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  members              CompetitionMember[]
+  seasons              Season[]
+  participants         Participant[]
+  auditEvents          AuditEvent[]
+}
+
+model CompetitionMember {
+  id            String      @id @default(uuid()) @db.Uuid
+  competitionId String      @db.Uuid
+  userId        String      @db.Uuid
+  role          MemberRole  @default(VIEWER)
+  createdAt     DateTime    @default(now())
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+  @@index([userId])
+}
+
+model Season {
+  id                  String        @id @default(uuid()) @db.Uuid
+  competitionId       String        @db.Uuid
+  name                String
+  slug                String
+  rules               Json
+  startsAt            DateTime?
+  endsAt              DateTime?
+  status              SeasonStatus @default(DRAFT)
+  prizeFundCents      Int           @default(0)
+  fundraisingCents    Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  competition         Competition   @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  gameweeks           Gameweek[]
+  entries             Entry[]
+  payments            Payment[]
+
+  @@unique([competitionId, slug])
+  @@index([competitionId, status])
+}
+
+model Participant {
+  id            String       @id @default(uuid()) @db.Uuid
+  competitionId String       @db.Uuid
+  userId        String?      @db.Uuid
+  name          String
+  email         String?
+  phone         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  competition   Competition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  entries       Entry[]
+  payments      Payment[]
+
+  @@index([competitionId, name])
+  @@index([userId])
+}
+
+model Entry {
+  id                 String       @id @default(uuid()) @db.Uuid
+  seasonId           String       @db.Uuid
+  participantId      String       @db.Uuid
+  number             Int
+  status             EntryStatus  @default(PENDING_PAYMENT)
+  eliminatedGameweekId String?    @db.Uuid
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  season             Season       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  participant        Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  picks              Pick[]
+
+  @@unique([seasonId, participantId, number])
+  @@index([seasonId, status])
+  @@index([participantId])
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  seasonId      String        @db.Uuid
+  participantId String        @db.Uuid
+  amountCents   Int
+  status        PaymentStatus @default(PENDING)
+  reference     String?
+  receivedAt    DateTime?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  season        Season        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  participant   Participant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([seasonId, status])
+  @@index([participantId])
+}
+
+model Gameweek {
+  id            String          @id @default(uuid()) @db.Uuid
+  seasonId      String          @db.Uuid
+  number        Int
+  name          String
+  startsAt      DateTime
+  deadlineAt    DateTime
+  status        GameweekStatus  @default(DRAFT)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  season        Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  fixtures      Fixture[]
+  picks         Pick[]
+
+  @@unique([seasonId, number])
+  @@index([seasonId, status])
+}
+
+model Team {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  shortName   String?
+  externalId  String?
+  createdAt   DateTime  @default(now())
+  homeFixtures Fixture[] @relation("HomeTeam")
+  awayFixtures Fixture[] @relation("AwayTeam")
+  picks       Pick[]
+
+  @@unique([name])
+  @@unique([externalId])
+}
+
+model Fixture {
+  id            String        @id @default(uuid()) @db.Uuid
+  gameweekId    String        @db.Uuid
+  homeTeamId    String        @db.Uuid
+  awayTeamId    String        @db.Uuid
+  kickoffAt     DateTime
+  status        FixtureStatus @default(SCHEDULED)
+  homeScore     Int?
+  awayScore     Int?
+  externalId    String?       @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  gameweek      Gameweek      @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  homeTeam      Team          @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam      Team          @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  @@index([gameweekId, kickoffAt])
+}
+
+model Pick {
+  id            String       @id @default(uuid()) @db.Uuid
+  entryId       String       @db.Uuid
+  gameweekId    String       @db.Uuid
+  teamId        String       @db.Uuid
+  method        PickMethod   @default(MEMBER)
+  outcome       PickOutcome  @default(PENDING)
+  submittedAt   DateTime     @default(now())
+  lockedAt      DateTime?
+  entry         Entry        @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  gameweek      Gameweek     @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+  team          Team         @relation(fields: [teamId], references: [id])
+
+  @@unique([entryId, gameweekId])
+  @@index([gameweekId, teamId])
+}
+
+model AuditEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  competitionId String       @db.Uuid
+  actorId       String?      @db.Uuid
+  type          String
+  entityType    String
+  entityId      String?
+  payload       Json?
+  createdAt     DateTime     @default(now())
+  competition   Competition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  actor         User?        @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([competitionId, createdAt])
+  @@index([entityType, entityId])
+}

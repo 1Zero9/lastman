@@ -13,12 +13,11 @@ export default function HomePage() {
       <section className="rounded-xl bg-gradient-to-br from-rvr-maroon to-rvr-maroon-light p-6 text-white shadow-md">
         <h2 className="mb-3 text-lg font-bold">How it works</h2>
         <p className="leading-relaxed text-white/85">
-          Pick one Premier League team each gameweek. If your team{" "}
+          Pick one team each gameweek. If your team{" "}
           <strong className="text-white">wins</strong>, you&apos;re through to the next round. Draw or
           lose and you&apos;re <strong className="text-white">out</strong>. Entry is €10 per person — 30%
-          goes to prize money (min €250), 70% funds the players&apos; trip. The Top 6 (Arsenal, Man City,
-          Villa, Man United, Chelsea, Liverpool) can each only be picked{" "}
-          <strong className="text-white">once</strong> in the entire competition.
+          is allocated between the prize fund and the fundraiser. Competition-specific restrictions,
+          entry price and allocation are configured by an administrator for each season.
         </p>
         <Link
           href="/rules"
@@ -71,10 +70,10 @@ export default function HomePage() {
         <h2 className="mb-4 text-lg font-bold text-gray-900">Quick links</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {[
-            { href: "/fixtures", label: "Fixtures", desc: "This weekend's matches" },
-            { href: "/standings", label: "Standings", desc: "All entrants and picks" },
-            { href: "/selections", label: "Selections", desc: "Team pick counts for GW1" },
-            { href: "/rules", label: "Full rules", desc: "Payment, cut-off, Top 6 rule" },
+            { href: "/fixtures", label: "Fixtures", desc: "Upcoming matches" },
+            { href: "/standings", label: "Standings", desc: "Live competition status" },
+            { href: "/selections", label: "Selections", desc: "Current selection summary" },
+            { href: "/rules", label: "Full rules", desc: "Rules for this competition" },
           ].map(({ href, label, desc }) => (
             <Link
               key={href}

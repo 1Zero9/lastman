@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Last Man Standing — RVR",
-  description: "Invite-only Last Man Standing fundraising competition for River Valley Rangers.",
+  title: "Last Man Standing",
+  description: "A fundraising competition platform.",
 };
 
 export default function RootLayout({
@@ -27,15 +27,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}>
-        <header className="bg-gradient-to-b from-rvr-maroon-dark to-rvr-maroon shadow-lg">
+        <header className="bg-nav shadow-lg">
           <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-5">
             <HeaderLogo />
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-bold tracking-tight text-white md:text-2xl">
-                RVR Last Man Standing
+                Last Man Standing
               </h1>
               <p className="mt-0.5 text-sm text-white/55">
-                Rivervalley Rangers 2014 Sat Major · Fundraiser
+                Fundraising competition platform
               </p>
             </div>
           </div>

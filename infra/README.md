@@ -4,10 +4,8 @@
 
 Copy `.env.example` to `.env.local` and fill in values.
 
-- **Supabase:** Create a project at [supabase.com](https://supabase.com). In Project Settings → API you get:
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- Optionally `SUPABASE_SERVICE_ROLE_KEY` for server-only admin operations (keep secret).
+- **PostgreSQL / Prisma:** Set `PRISMA_DATABASE_URL` to the server-only PostgreSQL connection string.
+  It must not use a `NEXT_PUBLIC_` prefix.
 
 ## Vercel
 
@@ -16,8 +14,8 @@ Copy `.env.example` to `.env.local` and fill in values.
 3. Add the same env vars in Vercel: Project → Settings → Environment Variables.
 4. Deploy. Vercel will build `next build` and deploy.
 
-## Supabase auth (magic link)
+## Database migrations
 
-- In Supabase Dashboard: Authentication → Providers → Email (and optionally Phone for SMS).
-- Enable "Confirm email" off for magic link if you want one-click sign-in.
-- Set Site URL to your Vercel URL (e.g. `https://lastman.vercel.app`) and add redirect URLs under Authentication → URL Configuration.
+- Create migrations locally with `npm run prisma:migrate -- --name descriptive_name`.
+- Apply committed migrations to production with `npm run prisma:deploy`.
+- Keep the database URL server-only; never expose it to browser code.

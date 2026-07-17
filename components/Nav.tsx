@@ -15,7 +15,7 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="border-t border-white/10 bg-black/20 px-4 py-2">
+    <nav className="border-t border-white/10 bg-primary/20 px-4 py-2">
       <div className="mx-auto flex max-w-6xl flex-wrap gap-1">
         {links.map(({ href, label }) => (
           <Link
@@ -23,7 +23,7 @@ export function Nav() {
             href={href}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
               pathname === href
-                ? "bg-white text-rvr-maroon shadow-sm"
+                ? "bg-white text-primary shadow-sm"
                 : "text-white/65 hover:bg-white/10 hover:text-white"
             }`}
           >

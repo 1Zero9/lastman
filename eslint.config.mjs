@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // This archived prototype is intentionally not part of the active application.
+    "Last Man Standing_rev2/**",
   ]),
 ]);
 

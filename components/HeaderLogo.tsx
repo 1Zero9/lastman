@@ -1,21 +1,14 @@
-"use client";
-
-import { useState } from "react";
+import Image from "next/image";
 
 export function HeaderLogo() {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
-  if (error) return null;
-
   return (
-    <img
-      src="/logo.png"
-      alt="River Valley Rangers"
-      className="h-14 w-14 shrink-0 rounded-full object-contain bg-black/20"
-      onLoad={() => setLoaded(true)}
-      onError={() => setError(true)}
-      style={loaded ? {} : { visibility: "hidden" }}
+    <Image
+      src="/lms-logo.png"
+      alt="Last Man Standing"
+      width={64}
+      height={64}
+      priority
+      className="h-14 w-14 shrink-0 rounded-full bg-white object-contain p-0.5 shadow-sm"
     />
   );
 }
