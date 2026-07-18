@@ -63,28 +63,27 @@ export async function injectLeagueSchedule(db: Db, seasonId: string, leagueId: s
     byMatchweek.set(fixture.matchweek, group);
   }
 
-  let round = 0;
-  for (const [matchweek, fixtures] of [...byMatchweek.entries()].sort((a, b) => a[0] - b[0])) {
-    round += 1;
-    const firstKickoff = fixtures[0].kickoffAt;
-    const gameweek = await db.gameweek.create({
-      data: {
-        seasonId,
-        number: round,
-        name: `Round ${round} (Matchweek ${matchweek})`,
-        startsAt: firstKickoff,
-        deadlineAt: new Date(firstKickoff.getTime() - 60 * 60 * 1000),
-        status: "DRAFT",
-      },
-    });
-    await db.fixture.createMany({
-      data: fixtures.map((fixture) => ({
-        gameweekId: gameweek.id,
+  const ordered = [...byMatchweek.entries()].sort((a, b) => a[0] - b[0]);
+  const gameweeks = await db.gameweek.createManyAndReturn({
+    data: ordered.map(([matchweek, fixtures], index) => ({
+      seasonId,
+      number: index + 1,
+      name: `Round ${index + 1} (Matchweek ${matchweek})`,
+      startsAt: fixtures[0].kickoffAt,
+      deadlineAt: new Date(fixtures[0].kickoffAt.getTime() - 60 * 60 * 1000),
+      status: "DRAFT" as const,
+    })),
+  });
+  const gameweekIdByNumber = new Map(gameweeks.map((gameweek) => [gameweek.number, gameweek.id]));
+  await db.fixture.createMany({
+    data: ordered.flatMap(([, fixtures], index) =>
+      fixtures.map((fixture) => ({
+        gameweekId: gameweekIdByNumber.get(index + 1)!,
         homeTeamId: fixture.homeTeamId,
         awayTeamId: fixture.awayTeamId,
         kickoffAt: fixture.kickoffAt,
       })),
-    });
-  }
-  return { rounds: round, fixtures: sourceFixtures.length };
+    ),
+  });
+  return { rounds: ordered.length, fixtures: sourceFixtures.length };
 }

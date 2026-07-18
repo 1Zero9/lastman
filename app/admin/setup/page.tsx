@@ -6,11 +6,15 @@ import { detectClubColor } from "@/lib/club-theme";
 import { defaultRules, injectLeagueSchedule, makeSlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
 
+function fail(message: string): never {
+  redirect(`/admin/setup?error=${encodeURIComponent(message)}`);
+}
+
 async function createCompetition(formData: FormData) {
   "use server";
 
   const user = await requireSignedInUser();
-  if (!(await hasOrganiserAccess(user.id))) throw new Error("Your account does not have organiser access yet.");
+  if (!(await hasOrganiserAccess(user.id))) fail("Your account does not have organiser access yet.");
   const name = String(formData.get("name") ?? "").trim();
   const seasonName = String(formData.get("seasonName") ?? "").trim();
   const currency = String(formData.get("currency") ?? "EUR").toUpperCase();
@@ -30,17 +34,18 @@ async function createCompetition(formData: FormData) {
   const welcomeMessage = String(formData.get("welcomeMessage") ?? "").trim() || null;
 
   if (!name || !seasonName || !/^[A-Z]{3}$/.test(currency) || !Number.isInteger(prizePercentage) || prizePercentage < 0 || prizePercentage > 100) {
-    throw new Error("Enter a competition name, season name, valid currency and prize allocation.");
+    fail("Enter a competition name, season name, valid currency and prize allocation.");
   }
-  if (!leagueId || !startDate || !endDate) throw new Error("Choose a league and a run window.");
+  if (!leagueId || !startDate || !endDate) fail("Choose a league and a run window.");
   const from = new Date(`${startDate}T00:00:00.000Z`);
   const to = new Date(`${endDate}T23:59:59.999Z`);
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) throw new Error("Enter a valid date range.");
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) fail("Enter a valid date range.");
 
   const existingMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id } });
   if (existingMembership) redirect("/admin");
 
-  const league = await prisma.league.findUniqueOrThrow({ where: { id: leagueId } });
+  const league = await prisma.league.findUnique({ where: { id: leagueId } });
+  if (!league) fail("That league could not be found.");
   const baseSlug = makeSlug(name);
   const suffix = crypto.randomUUID().slice(0, 8);
   const slug = `${baseSlug}-${suffix}`;
@@ -48,7 +53,8 @@ async function createCompetition(formData: FormData) {
   const entryFeeCents = moneyToCents(formData.get("entryFee"), 1000);
   const rules = { ...defaultRules, buyBack: { ...defaultRules.buyBack, enabled: buyBackEnabled } };
 
-  await prisma.$transaction(
+  try {
+    await prisma.$transaction(
     async (tx) => {
       const competition = await tx.competition.create({
         data: {
@@ -98,7 +104,10 @@ async function createCompetition(formData: FormData) {
       });
     },
     { timeout: 60000 },
-  );
+    );
+  } catch (error) {
+    fail(error instanceof Error ? error.message : "Something went wrong creating the competition. Please try again.");
+  }
 
   revalidatePath("/admin");
   redirect("/admin");
@@ -109,7 +118,7 @@ async function unlockOrganiserAccess(formData: FormData) {
 
   const user = await requireSignedInUser();
   const accessCode = String(formData.get("accessCode") ?? "").trim();
-  if (!organiserCodeValid(accessCode)) throw new Error("That organiser access code is not valid. Contact us to get set up as an organiser.");
+  if (!organiserCodeValid(accessCode)) fail("That organiser access code is not valid. Contact us to get set up as an organiser.");
   await prisma.user.update({ where: { id: user.id }, data: { organiserApprovedAt: new Date() } });
   revalidatePath("/admin/setup");
 }
@@ -118,7 +127,8 @@ function Req() {
   return <span aria-hidden className="ml-1 text-error">*</span>;
 }
 
-export default async function CompetitionSetupPage() {
+export default async function CompetitionSetupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const user = await requireSignedInUser();
   const hasMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id } });
   if (hasMembership) {
@@ -131,6 +141,7 @@ export default async function CompetitionSetupPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-primary">Admin setup</p>
         <h1 className="mt-2 text-2xl font-bold text-text">Organiser access required</h1>
         <p className="mt-3 text-text-secondary">Running a fundraiser is invite-only to prevent abuse. Enter your organiser access code to unlock setup, or contact the platform team to get one.</p>
+        {error && <p className="mt-4 rounded-xl border border-error/40 bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</p>}
         <form action={unlockOrganiserAccess} className="mt-6 flex flex-wrap gap-3">
           <input name="accessCode" required autoComplete="off" placeholder="Organiser access code" className="flex-1 rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">Unlock</button>
@@ -138,7 +149,12 @@ export default async function CompetitionSetupPage() {
       </div>
     );
   }
-  const leagues = await prisma.league.findMany({ orderBy: [{ sport: "asc" }, { name: "asc" }] });
+  const [leagues, fixtureRanges] = await Promise.all([
+    prisma.league.findMany({ orderBy: [{ sport: "asc" }, { name: "asc" }] }),
+    prisma.sourceFixture.groupBy({ by: ["leagueId"], _min: { kickoffAt: true }, _max: { kickoffAt: true } }),
+  ]);
+  const rangeByLeague = new Map(fixtureRanges.map((range) => [range.leagueId, range]));
+  const formatDate = (date: Date | null | undefined) => (date ? new Intl.DateTimeFormat("en-IE", { day: "numeric", month: "short", year: "numeric" }).format(date) : null);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -148,6 +164,7 @@ export default async function CompetitionSetupPage() {
 
       <form action={createCompetition} className="mt-8 space-y-6 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
         <p className="text-sm text-text-secondary">Fields marked <span className="font-semibold text-error">*</span> must be completed.</p>
+        {error && <div className="rounded-xl border border-error/40 bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</div>}
         {leagues.length === 0 && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text">
             <span className="font-semibold">No leagues are available yet.</span> A league must be loaded before you can create a competition — ask the platform team to add one (e.g. run the league seed script).
@@ -166,11 +183,15 @@ export default async function CompetitionSetupPage() {
             <span className="mb-1.5 block text-sm font-semibold text-text">Source league<Req /></span>
             <select name="leagueId" required className="w-full rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15">
               <option value="">Choose a league</option>
-              {leagues.map((league) => (
-                <option key={league.id} value={league.id}>{league.name}{league.seasonLabel ? ` ${league.seasonLabel}` : ""}</option>
-              ))}
+              {leagues.map((league) => {
+                const range = rangeByLeague.get(league.id);
+                const window = range?._min.kickoffAt && range?._max.kickoffAt ? ` — fixtures ${formatDate(range._min.kickoffAt)} to ${formatDate(range._max.kickoffAt)}` : " — no fixtures loaded";
+                return (
+                  <option key={league.id} value={league.id}>{league.name}{league.seasonLabel ? ` ${league.seasonLabel}` : ""}{window}</option>
+                );
+              })}
             </select>
-            <span className="mt-1.5 block text-sm text-text-secondary">The league cannot be changed once the campaign starts.</span>
+            <span className="mt-1.5 block text-sm text-text-secondary">The league cannot be changed once the campaign starts. Your run window below must overlap the league&apos;s fixture dates.</span>
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Run from<Req /></span>
