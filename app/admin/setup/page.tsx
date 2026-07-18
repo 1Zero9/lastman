@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { CompetitionStatus, SeasonStatus } from "@prisma/client";
-import { getAdminContext, moneyToCents, requireSignedInUser } from "@/lib/admin";
+import { getAdminContext, hasOrganiserAccess, moneyToCents, organiserCodeValid, requireSignedInUser } from "@/lib/admin";
 import { detectClubColor } from "@/lib/club-theme";
 import { defaultRules, injectLeagueSchedule, makeSlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +10,7 @@ async function createCompetition(formData: FormData) {
   "use server";
 
   const user = await requireSignedInUser();
+  if (!(await hasOrganiserAccess(user.id))) throw new Error("Your account does not have organiser access yet.");
   const name = String(formData.get("name") ?? "").trim();
   const seasonName = String(formData.get("seasonName") ?? "").trim();
   const currency = String(formData.get("currency") ?? "EUR").toUpperCase();
@@ -103,12 +104,35 @@ async function createCompetition(formData: FormData) {
   redirect("/admin");
 }
 
+async function unlockOrganiserAccess(formData: FormData) {
+  "use server";
+
+  const user = await requireSignedInUser();
+  const accessCode = String(formData.get("accessCode") ?? "").trim();
+  if (!organiserCodeValid(accessCode)) throw new Error("That organiser access code is not valid. Contact us to get set up as an organiser.");
+  await prisma.user.update({ where: { id: user.id }, data: { organiserApprovedAt: new Date() } });
+  revalidatePath("/admin/setup");
+}
+
 export default async function CompetitionSetupPage() {
   const user = await requireSignedInUser();
   const hasMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id } });
   if (hasMembership) {
     await getAdminContext();
     redirect("/admin");
+  }
+  if (!(await hasOrganiserAccess(user.id))) {
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-border">
+        <p className="text-sm font-semibold uppercase tracking-wide text-primary">Admin setup</p>
+        <h1 className="mt-2 text-2xl font-bold text-text">Organiser access required</h1>
+        <p className="mt-3 text-text-secondary">Running a fundraiser is invite-only to prevent abuse. Enter your organiser access code to unlock setup, or contact the platform team to get one.</p>
+        <form action={unlockOrganiserAccess} className="mt-6 flex flex-wrap gap-3">
+          <input name="accessCode" required autoComplete="off" placeholder="Organiser access code" className="flex-1 rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+          <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">Unlock</button>
+        </form>
+      </div>
+    );
   }
   const leagues = await prisma.league.findMany({ orderBy: [{ sport: "asc" }, { name: "asc" }] });
 

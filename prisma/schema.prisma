@@ -109,6 +109,7 @@ model User {
   displayName    String?
   passwordHash   String?
   platformRole   PlatformRole        @default(MEMBER)
+  organiserApprovedAt DateTime?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   memberships    CompetitionMember[]

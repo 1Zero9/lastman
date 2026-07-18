@@ -1,7 +1,24 @@
+import { timingSafeEqual } from "node:crypto";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export function organiserCodeValid(code: string) {
+  const expected = process.env.ORGANISER_ACCESS_CODE ?? "";
+  if (!expected || !code) return false;
+  const a = Buffer.from(code);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export async function hasOrganiserAccess(userId: string) {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { organiserApprovedAt: true, platformRole: true, memberships: { where: { role: { in: ["OWNER", "ADMIN"] } }, select: { id: true }, take: 1 } },
+  });
+  return Boolean(user.organiserApprovedAt) || ["PLATFORM_ADMIN", "BREAKGLASS_SUPPORT"].includes(user.platformRole) || user.memberships.length > 0;
+}
 
 export async function requireSignedInUser() {
   const session = await getServerSession(authOptions);

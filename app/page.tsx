@@ -3,10 +3,19 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
-  if (session) redirect("/my-entries");
+  if (session?.user?.id) {
+    const [membership, user] = await Promise.all([
+      prisma.competitionMember.findFirst({ where: { userId: session.user.id, role: { in: ["OWNER", "ADMIN"] }, competition: { status: { not: "ARCHIVED" } } }, select: { id: true } }),
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { organiserApprovedAt: true } }),
+    ]);
+    if (membership) redirect("/admin");
+    if (user?.organiserApprovedAt) redirect("/admin/setup");
+    redirect("/my-entries");
+  }
 
   return (
     <div className="mx-auto max-w-lg overflow-hidden rounded-3xl bg-nav shadow-2xl shadow-nav/20">

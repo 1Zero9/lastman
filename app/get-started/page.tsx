@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { organiserCodeValid } from "@/lib/admin";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -12,23 +13,25 @@ async function registerOrganiser(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirmPassword") ?? "");
+  const accessCode = String(formData.get("accessCode") ?? "").trim();
 
   if (!name || !email) throw new Error("Enter your name and email address.");
   if (password.length < 12) throw new Error("Your password must be at least 12 characters long.");
   if (password !== confirm) throw new Error("The passwords do not match.");
+  if (!organiserCodeValid(accessCode)) throw new Error("That organiser access code is not valid. Contact us to get set up as an organiser.");
 
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) redirect("/sign-in?exists=1");
 
   const passwordHash = await bcrypt.hash(password, 12);
-  await prisma.user.create({ data: { email, displayName: name, passwordHash } });
+  await prisma.user.create({ data: { email, displayName: name, passwordHash, organiserApprovedAt: new Date() } });
   redirect("/sign-in?registered=1");
 }
 
 const steps = [
   {
     title: "Create your organiser account",
-    body: "Register below with your email and a password. This account runs the competition — it is separate from playing.",
+    body: "Register below with your email, a password and your organiser access code. This account runs the competition — it is separate from playing.",
   },
   {
     title: "Set up the fundraiser",
@@ -110,6 +113,11 @@ export default async function GetStartedPage() {
               <input name="confirmPassword" type="password" minLength={12} required className={inputClass} />
             </label>
           </div>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-text">Organiser access code</span>
+            <input name="accessCode" required autoComplete="off" className={inputClass} />
+            <span className="mt-1.5 block text-sm text-text-secondary">Organiser accounts are invite-only to prevent abuse. Contact the platform team for a code.</span>
+          </label>
           <button className="w-full rounded-xl bg-primary px-5 py-3.5 font-bold text-white transition hover:bg-primary/90">
             Create account & set up your fundraiser
           </button>
