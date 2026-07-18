@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { CompetitionStatus, SeasonStatus } from "@prisma/client";
-import { getAdminContext, hasOrganiserAccess, moneyToCents, organiserCodeValid, requireSignedInUser } from "@/lib/admin";
+import { hasOrganiserAccess, moneyToCents, organiserCodeValid, requireSignedInUser } from "@/lib/admin";
 import { detectClubColor } from "@/lib/club-theme";
 import { defaultRules, injectLeagueSchedule, makeSlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +32,7 @@ async function createCompetition(formData: FormData) {
     clubColor = (await detectClubColor(clubWebsite)) ?? clubColor;
   }
   const welcomeMessage = String(formData.get("welcomeMessage") ?? "").trim() || null;
+  const duplicateFrom = String(formData.get("duplicateFrom") ?? "") || null;
 
   if (!name || !seasonName || !/^[A-Z]{3}$/.test(currency) || !Number.isInteger(prizePercentage) || prizePercentage < 0 || prizePercentage > 100) {
     fail("Enter a competition name, season name, valid currency and prize allocation.");
@@ -40,9 +41,15 @@ async function createCompetition(formData: FormData) {
   const from = new Date(`${startDate}T00:00:00.000Z`);
   const to = new Date(`${endDate}T23:59:59.999Z`);
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) fail("Enter a valid date range.");
+  const todayStart = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+  if (from < todayStart) fail("The run window cannot start in the past.");
 
-  const existingMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id } });
-  if (existingMembership) redirect("/admin");
+  const existingMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id, competition: { status: { not: CompetitionStatus.ARCHIVED } } } });
+  if (existingMembership && !duplicateFrom) redirect("/admin");
+  if (duplicateFrom) {
+    const ownerMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id, competitionId: duplicateFrom, role: "OWNER" } });
+    if (!ownerMembership) fail("Only the owner can duplicate this fundraiser.");
+  }
 
   const league = await prisma.league.findUnique({ where: { id: leagueId } });
   if (!league) fail("That league could not be found.");
@@ -92,6 +99,20 @@ async function createCompetition(formData: FormData) {
 
       const schedule = await injectLeagueSchedule(tx, season.id, league.id, from, to);
 
+      if (duplicateFrom) {
+        await tx.competition.update({ where: { id: duplicateFrom }, data: { status: CompetitionStatus.ARCHIVED } });
+        await tx.auditEvent.create({
+          data: {
+            competitionId: duplicateFrom,
+            actorId: user.id,
+            type: "competition.archived",
+            entityType: "Competition",
+            entityId: duplicateFrom,
+            payload: { reason: "duplicated", newCompetitionId: competition.id },
+          },
+        });
+      }
+
       await tx.auditEvent.create({
         data: {
           competitionId: competition.id,
@@ -99,7 +120,7 @@ async function createCompetition(formData: FormData) {
           type: "competition.created",
           entityType: "Competition",
           entityId: competition.id,
-          payload: { name, seasonName, league: league.name, ...schedule },
+          payload: { name, seasonName, league: league.name, duplicateFrom, ...schedule },
         },
       });
     },
@@ -127,14 +148,15 @@ function Req() {
   return <span aria-hidden className="ml-1 text-error">*</span>;
 }
 
-export default async function CompetitionSetupPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function CompetitionSetupPage({ searchParams }: { searchParams: Promise<{ error?: string; duplicate?: string }> }) {
+  const { error, duplicate } = await searchParams;
   const user = await requireSignedInUser();
-  const hasMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id } });
-  if (hasMembership) {
-    await getAdminContext();
-    redirect("/admin");
-  }
+  const membership = await prisma.competitionMember.findFirst({
+    where: { userId: user.id, competition: { status: { not: CompetitionStatus.ARCHIVED } } },
+    include: { competition: true },
+  });
+  const duplicating = Boolean(duplicate) && Boolean(membership) && membership!.role === "OWNER";
+  if (membership && !duplicating) redirect("/admin");
   if (!(await hasOrganiserAccess(user.id))) {
     return (
       <div className="mx-auto max-w-xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-border">
@@ -155,12 +177,22 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
   ]);
   const rangeByLeague = new Map(fixtureRanges.map((range) => [range.leagueId, range]));
   const formatDate = (date: Date | null | undefined) => (date ? new Intl.DateTimeFormat("en-IE", { day: "numeric", month: "short", year: "numeric" }).format(date) : null);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const src = duplicating ? membership!.competition : null;
+  const srcSeason = duplicating ? await prisma.season.findFirst({ where: { competitionId: membership!.competitionId }, orderBy: { createdAt: "desc" } }) : null;
+  const srcBuyBack = Boolean((srcSeason?.rules as { buyBack?: { enabled?: boolean } } | null)?.buyBack?.enabled);
 
   return (
     <div className="mx-auto max-w-2xl">
       <p className="text-sm font-semibold uppercase tracking-wide text-primary">Admin setup</p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight text-text">Create your fundraiser</h1>
+      <h1 className="mt-2 text-3xl font-bold tracking-tight text-text">{duplicating ? "Duplicate your fundraiser" : "Create your fundraiser"}</h1>
       <p className="mt-3 text-text-secondary">Choose a league and a run window. Every round and fixture inside that window is added automatically — you only record results and payments.</p>
+      {duplicating && (
+        <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text">
+          Settings copied from <span className="font-semibold">{src!.name}</span>. Pick a fresh run window — when you create the new fundraiser, the current one is archived (kept for your records, no longer editable).
+        </div>
+      )}
 
       <form action={createCompetition} className="mt-8 space-y-6 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
         <p className="text-sm text-text-secondary">Fields marked <span className="font-semibold text-error">*</span> must be completed.</p>
@@ -170,10 +202,11 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
             <span className="font-semibold">No leagues are available yet.</span> A league must be loaded before you can create a competition — ask the platform team to add one (e.g. run the league seed script).
           </div>
         )}
+        {duplicating && <input type="hidden" name="duplicateFrom" value={src!.id} />}
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-sm font-semibold text-text">Competition name<Req /></span>
-            <input name="name" required placeholder="Club Last Man Standing" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="name" required defaultValue={src?.name} placeholder="Club Last Man Standing" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-sm font-semibold text-text">Season / campaign name<Req /></span>
@@ -181,7 +214,7 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-sm font-semibold text-text">Source league<Req /></span>
-            <select name="leagueId" required className="w-full rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15">
+            <select name="leagueId" required defaultValue={srcSeason?.leagueId ?? ""} className="w-full rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15">
               <option value="">Choose a league</option>
               {leagues.map((league) => {
                 const range = rangeByLeague.get(league.id);
@@ -195,27 +228,27 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Run from<Req /></span>
-            <input name="startDate" type="date" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="startDate" type="date" required min={today} className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Run to<Req /></span>
-            <input name="endDate" type="date" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="endDate" type="date" required min={today} className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Entry fee<Req /></span>
-            <input name="entryFee" type="number" min="0" step="0.01" defaultValue="10.00" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="entryFee" type="number" min="0" step="0.01" defaultValue={src ? (src.entryFeeCents / 100).toFixed(2) : "10.00"} required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Currency<Req /></span>
-            <input name="currency" defaultValue="EUR" maxLength={3} required className="w-full rounded-xl border border-border px-4 py-3 uppercase outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="currency" defaultValue={src?.currency ?? "EUR"} maxLength={3} required className="w-full rounded-xl border border-border px-4 py-3 uppercase outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-sm font-semibold text-text">Prize fund allocation (%)<Req /></span>
-            <input name="prizePercentage" type="number" min="0" max="100" defaultValue="25" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="prizePercentage" type="number" min="0" max="100" defaultValue={src?.prizePercentage ?? 25} required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
             <span className="mt-1.5 block text-sm text-text-secondary">The remaining percentage goes to the club or cause.</span>
           </label>
           <label className="flex items-center gap-3 sm:col-span-2">
-            <input name="buyBack" type="checkbox" className="h-5 w-5 rounded border-border accent-primary" />
+            <input name="buyBack" type="checkbox" defaultChecked={srcBuyBack} className="h-5 w-5 rounded border-border accent-primary" />
             <span className="text-sm font-semibold text-text">Allow one buy-back per entry after elimination (extra fundraising)</span>
           </label>
           <div className="sm:col-span-2 border-t border-border pt-5">
@@ -224,26 +257,26 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
           </div>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Club name</span>
-            <input name="clubName" placeholder="River Valley Rangers" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="clubName" defaultValue={src?.clubName ?? undefined} placeholder="River Valley Rangers" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Club website</span>
-            <input name="clubWebsite" type="text" placeholder="www.yourclub.ie" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <input name="clubWebsite" type="text" defaultValue={src?.clubWebsite ?? undefined} placeholder="www.yourclub.ie" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-text">Club colour</span>
-            <input name="clubColor" type="color" defaultValue="#27AE60" className="h-[50px] w-full rounded-xl border border-border px-2 py-1" />
+            <input name="clubColor" type="color" defaultValue={src?.clubColor ?? "#27AE60"} className="h-[50px] w-full rounded-xl border border-border px-2 py-1" />
           </label>
           <label className="flex items-center gap-3 sm:col-span-2">
-            <input name="autoTheme" type="checkbox" defaultChecked className="h-5 w-5 rounded border-border accent-primary" />
+            <input name="autoTheme" type="checkbox" defaultChecked={!src?.clubColor} className="h-5 w-5 rounded border-border accent-primary" />
             <span className="text-sm text-text"><span className="font-semibold">Pick the colour from the club website automatically.</span> We read the site&apos;s theme colour; the colour above is used if nothing is found.</span>
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-sm font-semibold text-text">Welcome message</span>
-            <textarea name="welcomeMessage" rows={2} placeholder="Thanks for backing the club — best of luck!" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <textarea name="welcomeMessage" rows={2} defaultValue={src?.welcomeMessage ?? undefined} placeholder="Thanks for backing the club — best of luck!" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
         </div>
-        <button disabled={leagues.length === 0} className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">Create competition & inject fixtures</button>
+        <button disabled={leagues.length === 0} className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">{duplicating ? "Create duplicate & archive current" : "Create competition & inject fixtures"}</button>
       </form>
     </div>
   );
