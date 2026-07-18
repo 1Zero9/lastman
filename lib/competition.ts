@@ -7,7 +7,7 @@ export const defaultRules = {
   format: { mode: "survival" },
   pickFrequency: "one_team_per_gameweek",
   noTeamRepeats: true,
-  restrictedTeamGroup: [],
+  restrictedTeamGroup: ["Arsenal", "Manchester City", "Aston Villa", "Manchester United", "Chelsea", "Liverpool"],
   autopick: {
     enabled: true,
     method: "most_popular_eligible_team",

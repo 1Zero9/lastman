@@ -114,6 +114,10 @@ async function unlockOrganiserAccess(formData: FormData) {
   revalidatePath("/admin/setup");
 }
 
+function Req() {
+  return <span aria-hidden className="ml-1 text-error">*</span>;
+}
+
 export default async function CompetitionSetupPage() {
   const user = await requireSignedInUser();
   const hasMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id } });
@@ -143,17 +147,23 @@ export default async function CompetitionSetupPage() {
       <p className="mt-3 text-text-secondary">Choose a league and a run window. Every round and fixture inside that window is added automatically — you only record results and payments.</p>
 
       <form action={createCompetition} className="mt-8 space-y-6 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
+        <p className="text-sm text-text-secondary">Fields marked <span className="font-semibold text-error">*</span> must be completed.</p>
+        {leagues.length === 0 && (
+          <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text">
+            <span className="font-semibold">No leagues are available yet.</span> A league must be loaded before you can create a competition — ask the platform team to add one (e.g. run the league seed script).
+          </div>
+        )}
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block sm:col-span-2">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Competition name</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Competition name<Req /></span>
             <input name="name" required placeholder="Club Last Man Standing" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Season / campaign name</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Season / campaign name<Req /></span>
             <input name="seasonName" required placeholder="Spring 2027 fundraiser" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Source league</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Source league<Req /></span>
             <select name="leagueId" required className="w-full rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15">
               <option value="">Choose a league</option>
               {leagues.map((league) => (
@@ -163,23 +173,23 @@ export default async function CompetitionSetupPage() {
             <span className="mt-1.5 block text-sm text-text-secondary">The league cannot be changed once the campaign starts.</span>
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Run from</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Run from<Req /></span>
             <input name="startDate" type="date" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Run to</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Run to<Req /></span>
             <input name="endDate" type="date" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Entry fee</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Entry fee<Req /></span>
             <input name="entryFee" type="number" min="0" step="0.01" defaultValue="10.00" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Currency</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Currency<Req /></span>
             <input name="currency" defaultValue="EUR" maxLength={3} required className="w-full rounded-xl border border-border px-4 py-3 uppercase outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1.5 block text-sm font-semibold text-text">Prize fund allocation (%)</span>
+            <span className="mb-1.5 block text-sm font-semibold text-text">Prize fund allocation (%)<Req /></span>
             <input name="prizePercentage" type="number" min="0" max="100" defaultValue="25" required className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
             <span className="mt-1.5 block text-sm text-text-secondary">The remaining percentage goes to the club or cause.</span>
           </label>
@@ -212,7 +222,7 @@ export default async function CompetitionSetupPage() {
             <textarea name="welcomeMessage" rows={2} placeholder="Thanks for backing the club — best of luck!" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
         </div>
-        <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">Create competition & inject fixtures</button>
+        <button disabled={leagues.length === 0} className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">Create competition & inject fixtures</button>
       </form>
     </div>
   );

@@ -137,7 +137,20 @@ model Competition {
   members              CompetitionMember[]
   seasons              Season[]
   participants         Participant[]
+  sellers              Seller[]
   auditEvents          AuditEvent[]
+}
+
+model Seller {
+  id            String        @id @default(uuid()) @db.Uuid
+  competitionId String        @db.Uuid
+  name          String
+  minTarget     Int           @default(5)
+  createdAt     DateTime      @default(now())
+  competition   Competition   @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  participants  Participant[]
+
+  @@unique([competitionId, name])
 }
 
 model CompetitionMember {
@@ -210,6 +223,7 @@ model Participant {
   id            String       @id @default(uuid()) @db.Uuid
   competitionId String       @db.Uuid
   userId        String?      @db.Uuid
+  sellerId      String?      @db.Uuid
   name          String
   email         String?
   phone         String?
@@ -223,6 +237,7 @@ model Participant {
   updatedAt     DateTime     @updatedAt
   competition   Competition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  seller        Seller?      @relation(fields: [sellerId], references: [id], onDelete: SetNull)
   entries       Entry[]
   payments      Payment[]
   consents      ConsentRecord[]
@@ -230,6 +245,7 @@ model Participant {
 
   @@index([competitionId, name])
   @@index([userId])
+  @@index([sellerId])
 }
 
 model ConsentRecord {
