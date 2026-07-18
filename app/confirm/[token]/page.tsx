@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -15,6 +16,8 @@ async function confirmEntry(formData: FormData) {
   const agreed = formData.get("agree") === "on";
   const leaderboardConsent = formData.get("leaderboard") === "on";
   const futureConsent = formData.get("future") === "on";
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
   if (!token || !name || !email) throw new Error("Your name and email address are required.");
   if (!agreed) throw new Error("You must accept the privacy policy and disclaimer to take part.");
@@ -25,10 +28,20 @@ async function confirmEntry(formData: FormData) {
   });
   if (!participant) notFound();
 
+  const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (!existingUser) {
+    if (password.length < 12) throw new Error("Choose a password of at least 12 characters so you can sign in.");
+    if (password !== confirmPassword) throw new Error("The passwords do not match.");
+  }
+  const passwordHash = existingUser ? null : await bcrypt.hash(password, 12);
+
   await prisma.$transaction(async (tx) => {
+    const user = existingUser
+      ? existingUser
+      : await tx.user.create({ data: { email, displayName: name, passwordHash }, select: { id: true } });
     await tx.participant.update({
       where: { id: participant.id },
-      data: { name, email, club, location, confirmedAt: participant.confirmedAt ?? new Date() },
+      data: { name, email, club, location, userId: participant.userId ?? user.id, confirmedAt: participant.confirmedAt ?? new Date() },
     });
     const consents: Array<{ purpose: "CORE_PII" | "LEADERBOARD_HISTORY" | "MARKETING" }> = [{ purpose: "CORE_PII" }];
     if (leaderboardConsent) consents.push({ purpose: "LEADERBOARD_HISTORY" });
@@ -65,7 +78,7 @@ export default async function ConfirmPage({ params, searchParams }: { params: Pr
       <div className="mx-auto max-w-xl rounded-2xl bg-surface p-8 text-center shadow-sm ring-1 ring-border">
         <p className="text-4xl">✓</p>
         <h1 className="mt-4 text-2xl font-bold text-text">You&apos;re in, {participant.name}</h1>
-        <p className="mt-3 text-text-secondary">Your entry in {participant.competition.name} is confirmed. Sign in with your email to make your picks each round.</p>
+        <p className="mt-3 text-text-secondary">Your entry in {participant.competition.name} is confirmed. Sign in with your email and password to make your picks each round.</p>
         <Link href="/sign-in" className="mt-6 inline-flex rounded-xl bg-primary px-5 py-3 font-semibold text-white">Go to sign in</Link>
       </div>
     );
@@ -100,6 +113,21 @@ export default async function ConfirmPage({ params, searchParams }: { params: Pr
             <span className="mb-1.5 block text-sm font-semibold text-text">Location (optional)</span>
             <input name="location" defaultValue={participant.location ?? ""} className={inputClass} />
           </label>
+        </div>
+
+        <div className="rounded-xl bg-background p-4">
+          <p className="text-sm font-semibold text-text">Choose a password for your player account</p>
+          <p className="mt-1 text-xs text-text-secondary">You&apos;ll sign in with your email and this password to make your picks. Already have an account with this email? Leave these blank.</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-text">Password (12+ characters)</span>
+              <input name="password" type="password" minLength={12} className={inputClass} />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-text">Confirm password</span>
+              <input name="confirmPassword" type="password" minLength={12} className={inputClass} />
+            </label>
+          </div>
         </div>
 
         <div className="space-y-3 rounded-xl bg-background p-4">
