@@ -121,6 +121,7 @@ model Competition {
   id                   String              @id @default(uuid()) @db.Uuid
   name                 String
   slug                 String              @unique
+  joinCode             String?             @unique
   description          String?
   currency             String              @default("EUR") @db.Char(3)
   timezone             String              @default("Europe/Dublin")

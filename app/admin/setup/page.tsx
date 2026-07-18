@@ -1,9 +1,10 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { CompetitionStatus, SeasonStatus } from "@prisma/client";
-import { hasOrganiserAccess, moneyToCents, organiserCodeValid, requireSignedInUser } from "@/lib/admin";
+import { ACTIVE_COMPETITION_COOKIE, hasOrganiserAccess, moneyToCents, organiserCodeValid, requireSignedInUser } from "@/lib/admin";
 import { detectClubColor } from "@/lib/club-theme";
-import { defaultRules, injectLeagueSchedule, makeSlug } from "@/lib/competition";
+import { defaultRules, injectLeagueSchedule, makeJoinCode, makeSlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
 
 function fail(message: string): never {
@@ -44,8 +45,6 @@ async function createCompetition(formData: FormData) {
   const todayStart = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
   if (from < todayStart) fail("The run window cannot start in the past.");
 
-  const existingMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id, competition: { status: { not: CompetitionStatus.ARCHIVED } } } });
-  if (existingMembership && !duplicateFrom) redirect("/admin");
   if (duplicateFrom) {
     const ownerMembership = await prisma.competitionMember.findFirst({ where: { userId: user.id, competitionId: duplicateFrom, role: "OWNER" } });
     if (!ownerMembership) fail("Only the owner can duplicate this fundraiser.");
@@ -59,7 +58,9 @@ async function createCompetition(formData: FormData) {
   const seasonSlug = `${makeSlug(seasonName)}-${suffix}`;
   const entryFeeCents = moneyToCents(formData.get("entryFee"), 1000);
   const rules = { ...defaultRules, buyBack: { ...defaultRules.buyBack, enabled: buyBackEnabled } };
+  const joinCode = makeJoinCode();
 
+  let createdCompetitionId: string | null = null;
   try {
     await prisma.$transaction(
     async (tx) => {
@@ -67,6 +68,7 @@ async function createCompetition(formData: FormData) {
         data: {
           name,
           slug,
+          joinCode,
           currency,
           timezone: "Europe/Dublin",
           entryFeeCents,
@@ -99,19 +101,7 @@ async function createCompetition(formData: FormData) {
 
       const schedule = await injectLeagueSchedule(tx, season.id, league.id, from, to);
 
-      if (duplicateFrom) {
-        await tx.competition.update({ where: { id: duplicateFrom }, data: { status: CompetitionStatus.ARCHIVED } });
-        await tx.auditEvent.create({
-          data: {
-            competitionId: duplicateFrom,
-            actorId: user.id,
-            type: "competition.archived",
-            entityType: "Competition",
-            entityId: duplicateFrom,
-            payload: { reason: "duplicated", newCompetitionId: competition.id },
-          },
-        });
-      }
+      createdCompetitionId = competition.id;
 
       await tx.auditEvent.create({
         data: {
@@ -130,6 +120,9 @@ async function createCompetition(formData: FormData) {
     fail(error instanceof Error ? error.message : "Something went wrong creating the competition. Please try again.");
   }
 
+  if (createdCompetitionId) {
+    (await cookies()).set(ACTIVE_COMPETITION_COOKIE, createdCompetitionId, { path: "/", httpOnly: true, sameSite: "lax" });
+  }
   revalidatePath("/admin");
   redirect("/admin");
 }
@@ -148,15 +141,23 @@ function Req() {
   return <span aria-hidden className="ml-1 text-error">*</span>;
 }
 
-export default async function CompetitionSetupPage({ searchParams }: { searchParams: Promise<{ error?: string; duplicate?: string }> }) {
-  const { error, duplicate } = await searchParams;
+export default async function CompetitionSetupPage({ searchParams }: { searchParams: Promise<{ error?: string; duplicate?: string; new?: string }> }) {
+  const { error, duplicate, new: isNew } = await searchParams;
   const user = await requireSignedInUser();
-  const membership = await prisma.competitionMember.findFirst({
-    where: { userId: user.id, competition: { status: { not: CompetitionStatus.ARCHIVED } } },
-    include: { competition: true },
-  });
-  const duplicating = Boolean(duplicate) && Boolean(membership) && membership!.role === "OWNER";
-  if (membership && !duplicating) redirect("/admin");
+  const duplicateMembership = duplicate
+    ? await prisma.competitionMember.findFirst({
+        where: { userId: user.id, competitionId: duplicate, role: "OWNER" },
+        include: { competition: true },
+      })
+    : null;
+  const duplicating = Boolean(duplicateMembership);
+  if (!duplicating && !isNew && !error) {
+    const membership = await prisma.competitionMember.findFirst({
+      where: { userId: user.id, role: { in: ["OWNER", "ADMIN"] } },
+      select: { id: true },
+    });
+    if (membership) redirect("/admin");
+  }
   if (!(await hasOrganiserAccess(user.id))) {
     return (
       <div className="mx-auto max-w-xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-border">
@@ -179,8 +180,8 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
   const formatDate = (date: Date | null | undefined) => (date ? new Intl.DateTimeFormat("en-IE", { day: "numeric", month: "short", year: "numeric" }).format(date) : null);
   const today = new Date().toISOString().slice(0, 10);
 
-  const src = duplicating ? membership!.competition : null;
-  const srcSeason = duplicating ? await prisma.season.findFirst({ where: { competitionId: membership!.competitionId }, orderBy: { createdAt: "desc" } }) : null;
+  const src = duplicateMembership?.competition ?? null;
+  const srcSeason = src ? await prisma.season.findFirst({ where: { competitionId: src.id }, orderBy: { createdAt: "desc" } }) : null;
   const srcBuyBack = Boolean((srcSeason?.rules as { buyBack?: { enabled?: boolean } } | null)?.buyBack?.enabled);
 
   return (
@@ -190,7 +191,7 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
       <p className="mt-3 text-text-secondary">Choose a league and a run window. Every round and fixture inside that window is added automatically — you only record results and payments.</p>
       {duplicating && (
         <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text">
-          Settings copied from <span className="font-semibold">{src!.name}</span>. Pick a fresh run window — when you create the new fundraiser, the current one is archived (kept for your records, no longer editable).
+          Settings copied from <span className="font-semibold">{src!.name}</span>. Pick a fresh run window — the original fundraiser is left untouched and stays in your list.
         </div>
       )}
 
@@ -276,7 +277,7 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
             <textarea name="welcomeMessage" rows={2} defaultValue={src?.welcomeMessage ?? undefined} placeholder="Thanks for backing the club — best of luck!" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
           </label>
         </div>
-        <button disabled={leagues.length === 0} className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">{duplicating ? "Create duplicate & archive current" : "Create competition & inject fixtures"}</button>
+        <button disabled={leagues.length === 0} className="rounded-xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">{duplicating ? "Create duplicate fundraiser" : "Create competition & inject fixtures"}</button>
       </form>
     </div>
   );

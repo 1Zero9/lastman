@@ -38,8 +38,8 @@ const steps = [
     body: "Pick a source league, choose your run window (for example January to March), the entry fee, the prize split, buy-backs, and your club branding. Every round and fixture in the window is added automatically.",
   },
   {
-    title: "Collect money offline, add your players",
-    body: "Entry fees are paid to you directly — cash, transfer, whatever works. Add each paid player in the admin area, confirm their payment, and share their personal confirm link by WhatsApp or text.",
+    title: "Share your join link, collect money offline",
+    body: "Every fundraiser gets a join code and link — share it by WhatsApp and players sign themselves up. Entry fees are paid to you directly (cash, transfer, whatever works); you confirm each payment with a tick to activate their entries. You can also add players by hand.",
   },
   {
     title: "Players confirm and pick",
@@ -85,8 +85,8 @@ export default async function GetStartedPage() {
           ))}
         </ol>
         <p className="mt-5 text-xs text-text-secondary">
-          Playing rather than organising? You don&apos;t register here — your organiser sends you a personal confirm
-          link. See the <Link href="/rules" className="font-semibold text-primary underline">rules</Link>,{" "}
+          Playing rather than organising? You don&apos;t register here — use the join link or code your organiser
+          shared. See the <Link href="/rules" className="font-semibold text-primary underline">rules</Link>,{" "}
           <Link href="/privacy" className="font-semibold text-primary underline">privacy policy</Link> and{" "}
           <Link href="/disclaimer" className="font-semibold text-primary underline">disclaimer</Link>.
         </p>

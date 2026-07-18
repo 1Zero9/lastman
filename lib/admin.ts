@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { getServerSession } from "next-auth";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -33,20 +34,29 @@ export async function requirePlatformAccess() {
   return platformUser;
 }
 
-export async function getAdminContext() {
-  const user = await requireSignedInUser();
-  const membership = await prisma.competitionMember.findFirst({
-    where: {
-      userId: user.id,
-      role: { in: ["OWNER", "ADMIN"] },
-      competition: { status: { not: "ARCHIVED" } },
-    },
+export const ACTIVE_COMPETITION_COOKIE = "lms_active_competition";
+
+export async function listAdminMemberships(userId: string) {
+  return prisma.competitionMember.findMany({
+    where: { userId, role: { in: ["OWNER", "ADMIN"] } },
     include: { competition: true },
     orderBy: { createdAt: "asc" },
   });
+}
 
-  if (!membership) redirect("/admin/setup");
-  return { user, membership, competition: membership.competition };
+export async function getAdminContext() {
+  const user = await requireSignedInUser();
+  const memberships = await listAdminMemberships(user.id);
+  if (!memberships.length) redirect("/admin/setup");
+
+  const cookieStore = await cookies();
+  const selectedId = cookieStore.get(ACTIVE_COMPETITION_COOKIE)?.value;
+  const membership =
+    memberships.find((item) => item.competitionId === selectedId) ??
+    memberships.find((item) => item.competition.status !== "ARCHIVED") ??
+    memberships[0];
+
+  return { user, membership, competition: membership.competition, memberships };
 }
 
 export function moneyToCents(value: FormDataEntryValue | null, fallback: number) {

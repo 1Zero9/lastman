@@ -1,4 +1,7 @@
+import { randomInt } from "node:crypto";
 import { Competition, Prisma, PrismaClient } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const POLICY_VERSION = "2026-07-17";
@@ -32,6 +35,26 @@ export function makeSlug(value: string) {
   return slug || "competition";
 }
 
+const JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+export function makeJoinCode(length = 6) {
+  return Array.from({ length }, () => JOIN_CODE_ALPHABET[randomInt(JOIN_CODE_ALPHABET.length)]).join("");
+}
+
+export async function ensureJoinCode(competitionId: string, existing: string | null) {
+  if (existing) return existing;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const joinCode = makeJoinCode();
+    try {
+      await prisma.competition.update({ where: { id: competitionId }, data: { joinCode } });
+      return joinCode;
+    } catch {
+      // collision on the unique join code — try again
+    }
+  }
+  throw new Error("Could not generate a join code. Please try again.");
+}
+
 type Db = PrismaClient | Prisma.TransactionClient;
 
 export async function getPublicSeason() {
@@ -40,6 +63,34 @@ export async function getPublicSeason() {
   const season = await prisma.season.findFirst({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" }, include: { league: true } });
   if (!season) return null;
   return { competition, season };
+}
+
+export async function getSeasonBySlug(slug: string) {
+  const competition = await prisma.competition.findFirst({ where: { slug, status: { not: "DRAFT" } } });
+  if (!competition) return null;
+  const season = await prisma.season.findFirst({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" }, include: { league: true } });
+  if (!season) return null;
+  return { competition, season };
+}
+
+export async function resolvePublicCompetitionSlug() {
+  const session = await getServerSession(authOptions);
+  if (session?.user?.id) {
+    const participant = await prisma.participant.findFirst({
+      where: { userId: session.user.id, anonymisedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { competition: { select: { slug: true } } },
+    });
+    if (participant) return participant.competition.slug;
+    const membership = await prisma.competitionMember.findFirst({
+      where: { userId: session.user.id, competition: { status: { not: "ARCHIVED" } } },
+      orderBy: { createdAt: "asc" },
+      select: { competition: { select: { slug: true } } },
+    });
+    if (membership) return membership.competition.slug;
+  }
+  const competition = await prisma.competition.findFirst({ where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, select: { slug: true } });
+  return competition?.slug ?? null;
 }
 
 export async function getPotSummary(seasonId: string, competition: Competition) {
