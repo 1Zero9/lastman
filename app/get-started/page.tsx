@@ -86,7 +86,8 @@ export default async function GetStartedPage() {
         </ol>
         <p className="mt-5 text-xs text-text-secondary">
           Playing rather than organising? You don&apos;t register here — use the join link or code your organiser
-          shared. See the <Link href="/rules" className="font-semibold text-primary underline">rules</Link>,{" "}
+          shared. See the <Link href="/guide" className="font-semibold text-primary underline">guide</Link>,{" "}
+          <Link href="/rules" className="font-semibold text-primary underline">rules</Link>,{" "}
           <Link href="/privacy" className="font-semibold text-primary underline">privacy policy</Link> and{" "}
           <Link href="/disclaimer" className="font-semibold text-primary underline">disclaimer</Link>.
         </p>

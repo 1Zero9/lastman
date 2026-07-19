@@ -88,6 +88,7 @@ export default async function RootLayout({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-xs text-text-secondary">
             <p>Unofficial fundraising tool · money is handled offline by your organiser · v{APP_VERSION}</p>
             <div className="flex gap-4">
+              <Link href="/guide" className="font-semibold hover:text-primary">Guide</Link>
               <Link href="/privacy" className="font-semibold hover:text-primary">Privacy</Link>
               <Link href="/disclaimer" className="font-semibold hover:text-primary">Disclaimer</Link>
               <Link href="/rules" className="font-semibold hover:text-primary">Rules</Link>
