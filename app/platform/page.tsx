@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 async function provisionOrganiser(formData: FormData) {
   "use server";
   const actor = await requirePlatformAccess();
+  if (actor.platformRole !== "PLATFORM_ADMIN") throw new Error("Only a platform administrator can provision organiser access.");
   const competitionId = String(formData.get("competitionId") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const displayName = String(formData.get("displayName") ?? "").trim();
