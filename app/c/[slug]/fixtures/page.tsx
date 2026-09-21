@@ -25,8 +25,14 @@ export default async function FixturesPage({ params }: { params: Promise<{ slug:
   });
 
   const formatDate = (date: Date) => formatInTimeZone(date, competition.timezone, "EEE d MMM, HH:mm");
-  const activeGameweeks = gameweeks.filter((gameweek) => gameweek.status !== "SETTLED" && gameweek.status !== "CANCELLED");
-  const finishedGameweeks = gameweeks.filter((gameweek) => gameweek.status === "SETTLED" || gameweek.status === "CANCELLED");
+  const nextDraftGameweekId = gameweeks.find((gameweek) => gameweek.status === "DRAFT")?.id;
+  const highlightedIds = new Set(
+    gameweeks
+      .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
+      .map((gameweek) => gameweek.id),
+  );
+  const activeGameweeks = gameweeks.filter((gameweek) => highlightedIds.has(gameweek.id));
+  const otherGameweeks = gameweeks.filter((gameweek) => !highlightedIds.has(gameweek.id));
 
   const renderGameweek = (gameweek: (typeof gameweeks)[number]) => (
     <article key={gameweek.id} className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border">
@@ -66,12 +72,12 @@ export default async function FixturesPage({ params }: { params: Promise<{ slug:
 
       <div className="space-y-6">
         {activeGameweeks.map(renderGameweek)}
-        {finishedGameweeks.length > 0 && (
+        {otherGameweeks.length > 0 && (
           <details className="rounded-2xl bg-surface p-2 shadow-sm ring-1 ring-border">
             <summary className="cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-semibold text-text-secondary">
-              {finishedGameweeks.length} settled gameweek{finishedGameweeks.length === 1 ? "" : "s"} — click to show
+              {otherGameweeks.length} more gameweek{otherGameweeks.length === 1 ? "" : "s"} (upcoming &amp; settled) — click to show
             </summary>
-            <div className="mt-2 space-y-6 p-2">{finishedGameweeks.map(renderGameweek)}</div>
+            <div className="mt-2 space-y-6 p-2">{otherGameweeks.map(renderGameweek)}</div>
           </details>
         )}
       </div>

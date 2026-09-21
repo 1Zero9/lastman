@@ -176,8 +176,14 @@ export default async function SchedulePage() {
   ]);
   const nextNumber = (gameweeks.at(-1)?.number ?? 0) + 1;
   const draftGameweeks = gameweeks.filter((gameweek) => gameweek.status === "DRAFT");
-  const activeGameweeks = gameweeks.filter((gameweek) => gameweek.status !== "SETTLED" && gameweek.status !== "CANCELLED");
-  const finishedGameweeks = gameweeks.filter((gameweek) => gameweek.status === "SETTLED" || gameweek.status === "CANCELLED");
+  const nextDraftGameweekId = draftGameweeks[0]?.id;
+  const highlightedIds = new Set(
+    gameweeks
+      .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
+      .map((gameweek) => gameweek.id),
+  );
+  const activeGameweeks = gameweeks.filter((gameweek) => highlightedIds.has(gameweek.id));
+  const otherGameweeks = gameweeks.filter((gameweek) => !highlightedIds.has(gameweek.id));
 
   return (
     <div className="space-y-8">
@@ -201,13 +207,13 @@ export default async function SchedulePage() {
             {activeGameweeks.map((gameweek) => (
               <GameweekCard key={gameweek.id} gameweek={gameweek} timezone={competition.timezone} />
             ))}
-            {finishedGameweeks.length > 0 && (
+            {otherGameweeks.length > 0 && (
               <details className="rounded-2xl bg-surface p-2 shadow-sm ring-1 ring-border">
                 <summary className="cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-semibold text-text-secondary">
-                  {finishedGameweeks.length} settled gameweek{finishedGameweeks.length === 1 ? "" : "s"} — click to show
+                  {otherGameweeks.length} more gameweek{otherGameweeks.length === 1 ? "" : "s"} (upcoming drafts &amp; settled rounds) — click to show
                 </summary>
                 <div className="mt-2 space-y-4 p-2">
-                  {finishedGameweeks.map((gameweek) => (
+                  {otherGameweeks.map((gameweek) => (
                     <GameweekCard key={gameweek.id} gameweek={gameweek} timezone={competition.timezone} />
                   ))}
                 </div>
