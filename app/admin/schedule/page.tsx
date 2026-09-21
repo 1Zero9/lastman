@@ -115,6 +115,54 @@ const statusClass: Record<string, string> = {
   CANCELLED: "bg-error/10 text-error",
 };
 
+type GameweekWithFixtures = Awaited<ReturnType<typeof prisma.gameweek.findMany<{
+  include: { fixtures: { include: { homeTeam: true; awayTeam: true } } };
+}>>>[number];
+
+function GameweekCard({ gameweek, timezone }: { gameweek: GameweekWithFixtures; timezone: string }) {
+  return (
+    <article className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-text">{gameweek.name}</h2>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[gameweek.status]}`}>{gameweek.status.toLowerCase()}</span>
+          </div>
+          <p className="mt-1 text-sm text-text-secondary">Deadline: {formatDate(gameweek.deadlineAt, timezone)} · Starts: {formatDate(gameweek.startsAt, timezone)}</p>
+        </div>
+        <div className="flex gap-2">
+          {gameweek.status === "DRAFT" && (
+            <form action={changeGameweekStatus}>
+              <input type="hidden" name="gameweekId" value={gameweek.id} />
+              <input type="hidden" name="action" value="open" />
+              <button className="rounded-lg bg-success px-3 py-2 text-sm font-semibold text-white">Open gameweek</button>
+            </form>
+          )}
+          {gameweek.status === "OPEN" && (
+            <form action={changeGameweekStatus}>
+              <input type="hidden" name="gameweekId" value={gameweek.id} />
+              <input type="hidden" name="action" value="lock" />
+              <button className="rounded-lg bg-nav px-3 py-2 text-sm font-semibold text-white">Lock picks</button>
+            </form>
+          )}
+        </div>
+      </div>
+      <div className="divide-y divide-border">
+        {gameweek.fixtures.length === 0 ? (
+          <p className="px-6 py-5 text-sm text-text-secondary">No fixtures added yet.</p>
+        ) : (
+          gameweek.fixtures.map((fixture) => (
+            <div key={fixture.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+              <p className="font-semibold text-text">{fixture.homeTeam.name} <span className="mx-1 text-text-secondary">vs</span> {fixture.awayTeam.name}</p>
+              <p className="text-sm text-text-secondary">{formatDate(fixture.kickoffAt, timezone)}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </article>
+  );
+}
+
 export default async function SchedulePage() {
   const { competition } = await getAdminContext();
   const season = await prisma.season.findFirstOrThrow({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" } });
@@ -128,6 +176,8 @@ export default async function SchedulePage() {
   ]);
   const nextNumber = (gameweeks.at(-1)?.number ?? 0) + 1;
   const draftGameweeks = gameweeks.filter((gameweek) => gameweek.status === "DRAFT");
+  const activeGameweeks = gameweeks.filter((gameweek) => gameweek.status !== "SETTLED" && gameweek.status !== "CANCELLED");
+  const finishedGameweeks = gameweeks.filter((gameweek) => gameweek.status === "SETTLED" || gameweek.status === "CANCELLED");
 
   return (
     <div className="space-y-8">
@@ -143,7 +193,29 @@ export default async function SchedulePage() {
 
       <section className="rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border"><h2 className="text-lg font-bold text-text">Add fixture</h2>{draftGameweeks.length === 0 || teams.length < 2 ? <p className="mt-3 text-sm text-text-secondary">Create a draft gameweek and at least two teams before adding a fixture.</p> : <form action={createFixture} className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4"><select name="gameweekId" required className="rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary">{draftGameweeks.map((gameweek) => <option key={gameweek.id} value={gameweek.id}>{gameweek.name}</option>)}</select><select name="homeTeamId" required className="rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary"><option value="">Home team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select><select name="awayTeamId" required className="rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary"><option value="">Away team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select><input name="kickoffAt" type="datetime-local" required className="rounded-xl border border-border px-4 py-3 outline-none focus:border-primary" /><button className="w-fit rounded-xl bg-primary px-4 py-3 font-semibold text-white md:col-span-2 lg:col-span-4">Add fixture</button></form>}</section>
 
-      <section className="space-y-4">{gameweeks.length === 0 ? <div className="rounded-2xl bg-surface p-8 text-sm text-text-secondary ring-1 ring-border">No gameweeks have been created yet.</div> : gameweeks.map((gameweek) => <article key={gameweek.id} className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border"><div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-5"><div><div className="flex items-center gap-2"><h2 className="text-lg font-bold text-text">{gameweek.name}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[gameweek.status]}`}>{gameweek.status.toLowerCase()}</span></div><p className="mt-1 text-sm text-text-secondary">Deadline: {formatDate(gameweek.deadlineAt, competition.timezone)} · Starts: {formatDate(gameweek.startsAt, competition.timezone)}</p></div><div className="flex gap-2">{gameweek.status === "DRAFT" && <form action={changeGameweekStatus}><input type="hidden" name="gameweekId" value={gameweek.id} /><input type="hidden" name="action" value="open" /><button className="rounded-lg bg-success px-3 py-2 text-sm font-semibold text-white">Open gameweek</button></form>}{gameweek.status === "OPEN" && <form action={changeGameweekStatus}><input type="hidden" name="gameweekId" value={gameweek.id} /><input type="hidden" name="action" value="lock" /><button className="rounded-lg bg-nav px-3 py-2 text-sm font-semibold text-white">Lock picks</button></form>}</div></div><div className="divide-y divide-border">{gameweek.fixtures.length === 0 ? <p className="px-6 py-5 text-sm text-text-secondary">No fixtures added yet.</p> : gameweek.fixtures.map((fixture) => <div key={fixture.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4"><p className="font-semibold text-text">{fixture.homeTeam.name} <span className="mx-1 text-text-secondary">vs</span> {fixture.awayTeam.name}</p><p className="text-sm text-text-secondary">{formatDate(fixture.kickoffAt, competition.timezone)}</p></div>)}</div></article>)}</section>
+      <section className="space-y-4">
+        {gameweeks.length === 0 ? (
+          <div className="rounded-2xl bg-surface p-8 text-sm text-text-secondary ring-1 ring-border">No gameweeks have been created yet.</div>
+        ) : (
+          <>
+            {activeGameweeks.map((gameweek) => (
+              <GameweekCard key={gameweek.id} gameweek={gameweek} timezone={competition.timezone} />
+            ))}
+            {finishedGameweeks.length > 0 && (
+              <details className="rounded-2xl bg-surface p-2 shadow-sm ring-1 ring-border">
+                <summary className="cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-semibold text-text-secondary">
+                  {finishedGameweeks.length} settled gameweek{finishedGameweeks.length === 1 ? "" : "s"} — click to show
+                </summary>
+                <div className="mt-2 space-y-4 p-2">
+                  {finishedGameweeks.map((gameweek) => (
+                    <GameweekCard key={gameweek.id} gameweek={gameweek} timezone={competition.timezone} />
+                  ))}
+                </div>
+              </details>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }

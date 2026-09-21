@@ -299,8 +299,17 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                           </div>
                         ) : (
                           <div className="rounded-xl bg-warning/10 px-4 py-3 text-sm font-semibold text-text">
-                            No pick yet — tap a team to lock it in.{" "}
-                            {rules.autopick?.enabled !== false && <span className="font-medium text-text-secondary">Miss the deadline and you&apos;ll be auto-assigned the most popular team left.</span>}
+                            {deadlinePassed ? (
+                              <>
+                                No pick was made before the deadline.{" "}
+                                {rules.autopick?.enabled !== false && <span className="font-medium text-text-secondary">You&apos;ll be auto-assigned the most popular team left once your organiser settles this round.</span>}
+                              </>
+                            ) : (
+                              <>
+                                No pick yet — tap a team to lock it in.{" "}
+                                {rules.autopick?.enabled !== false && <span className="font-medium text-text-secondary">Miss the deadline and you&apos;ll be auto-assigned the most popular team left.</span>}
+                              </>
+                            )}
                           </div>
                         )}
 
