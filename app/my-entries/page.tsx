@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ClubWelcome } from "@/components/ClubWelcome";
 import { Countdown } from "@/components/Countdown";
+import { PickCountdownBanner } from "@/components/PickCountdownBanner";
+import { ScoreboardHero } from "@/components/ScoreboardHero";
 import { requireSignedInUser } from "@/lib/admin";
 import { getPotSummary } from "@/lib/competition";
 import { eligibleTeamIds } from "@/lib/engine";
@@ -19,6 +21,36 @@ type Rules = {
 
 const formatMoney = (cents: number, currency: string) =>
   new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(cents / 100);
+
+function teamInitials(name: string, shortName: string | null) {
+  if (shortName) return shortName.slice(0, 3).toUpperCase();
+  const words = name.split(" ").filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase();
+}
+
+function FlameIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2c1 3-3 4-3 7a3 3 0 0 0 6 0c0-1-.5-2-1-2.5 2 .5 4 2.5 4 5.5a6 6 0 0 1-12 0c0-4 3-4 3-8 0-1 .5-1.7 1-2z" />
+    </svg>
+  );
+}
+
+function XMarkBadge() {
+  return (
+    <span className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+    </span>
+  );
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8z" />
+    </svg>
+  );
+}
 
 function fail(message: string): never {
   redirect(`/my-entries?error=${encodeURIComponent(message)}`);
@@ -103,6 +135,8 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
     total: number;
     winners: number;
     lastSettledNumber: number | null;
+    gameweekTotal: number;
+    seasonOrdinal: number;
     pot: { raisedCents: number; prizeCents: number; clubCents: number; currency: string };
   }>();
   const eligibleByEntry = new Map<string, Set<string>>();
@@ -110,11 +144,13 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
   for (const participant of participants) {
     for (const entry of participant.entries) {
       if (!seasonInfo.has(entry.seasonId)) {
-        const [openGameweek, statusGroups, lastSettled, pot] = await Promise.all([
+        const [openGameweek, statusGroups, lastSettled, pot, gameweekTotal, seasonOrdinal] = await Promise.all([
           getOpenGameweek(entry.seasonId),
           prisma.entry.groupBy({ by: ["status"], where: { seasonId: entry.seasonId, status: { not: "VOID" } }, _count: { _all: true } }),
           prisma.gameweek.findFirst({ where: { seasonId: entry.seasonId, status: "SETTLED" }, orderBy: { number: "desc" }, select: { number: true } }),
           getPotSummary(entry.seasonId, participant.competition),
+          prisma.gameweek.count({ where: { seasonId: entry.seasonId } }),
+          prisma.season.count({ where: { competitionId: entry.season.competitionId, createdAt: { lte: entry.season.createdAt } } }),
         ]);
         const count = (status: string) => statusGroups.find((group) => group.status === status)?._count._all ?? 0;
         seasonInfo.set(entry.seasonId, {
@@ -123,6 +159,8 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
           total: statusGroups.reduce((sum, group) => sum + group._count._all, 0),
           winners: count("WINNER"),
           lastSettledNumber: lastSettled?.number ?? null,
+          gameweekTotal,
+          seasonOrdinal,
           pot,
         });
       }
@@ -182,21 +220,39 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                   <h2 className="text-xl font-bold text-text">{competition.name}</h2>
                   <p className="mt-0.5 text-sm text-text-secondary">{season.name}</p>
                 </div>
-                <a
-                  href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-xl bg-success px-4 py-2.5 text-sm font-bold text-white transition hover:bg-success/90"
-                >
-                  Share on WhatsApp
-                </a>
+                <div className="flex items-center gap-2">
+                  <Link href="/leaderboard" className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm font-bold text-warning transition hover:bg-warning/15">
+                    Leaderboard
+                  </Link>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl bg-success px-4 py-2.5 text-sm font-bold text-white transition hover:bg-success/90"
+                  >
+                    Share on WhatsApp
+                  </a>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl bg-nav p-4 text-white shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Still standing</p>
-                  <p className="mt-1.5 text-2xl font-extrabold">{info.alive} <span className="text-sm font-semibold text-white/60">of {info.total}</span></p>
-                </div>
+              <ScoreboardHero
+                roundNumber={info.openGameweek?.number ?? info.lastSettledNumber}
+                roundsTotal={info.gameweekTotal || null}
+                roundStatusLabel={info.openGameweek ? (new Date() >= info.openGameweek.deadlineAt ? "picks locked" : "picks open") : "between rounds"}
+                alive={info.alive}
+                total={info.total}
+                seasonOrdinal={info.seasonOrdinal}
+              />
+
+              {info.openGameweek && new Date() < info.openGameweek.deadlineAt && (
+                <PickCountdownBanner
+                  deadline={info.openGameweek.deadlineAt.toISOString()}
+                  deadlineLabel={formatInTimeZone(info.openGameweek.deadlineAt, competition.timezone, "EEE HH:mm")}
+                  href="#your-entries"
+                />
+              )}
+
+              <div id="your-entries" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-border">
                   <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Prize pot</p>
                   <p className="mt-1.5 text-2xl font-extrabold text-text">{formatMoney(info.pot.prizeCents, info.pot.currency)}</p>
@@ -215,6 +271,7 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
               {entries.map((entry) => {
                 const streak = entry.picks.filter((pick) => pick.outcome === "WIN").length;
                 const usedIds = new Set(entry.picks.map((pick) => pick.teamId));
+                const usedPickByTeam = new Map(entry.picks.map((item) => [item.teamId, item]));
                 const usedNames = [...entry.picks].sort((a, b) => a.gameweek.number - b.gameweek.number).map((pick) => pick.team.name);
                 const gameweek = info.openGameweek;
                 const pick = gameweek ? entry.picks.find((item) => item.gameweekId === gameweek.id) : undefined;
@@ -226,12 +283,14 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
 
                 if (entry.status === "WINNER") {
                   return (
-                    <section key={entry.id} className="rounded-2xl bg-accent/15 p-6 shadow-sm ring-2 ring-accent">
-                      <p className="text-3xl">🏆</p>
-                      <h3 className="mt-2 text-xl font-extrabold text-text">Entry #{entry.number} — last one standing!</h3>
-                      <p className="mt-2 text-text-secondary">
+                    <section key={entry.id} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-nav to-[#0a1a12] p-6 text-white shadow-lg ring-2 ring-accent">
+                      <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/20 blur-2xl" />
+                      <p className="text-4xl">🏆</p>
+                      <h3 className="mt-2 font-mono text-3xl font-extrabold uppercase tracking-tight text-accent drop-shadow-[0_0_18px_rgba(163,230,53,0.35)]">Last one standing!</h3>
+                      <p className="mt-1 text-sm font-bold text-white/70">Entry #{entry.number}</p>
+                      <p className="mt-3 text-sm text-white/85">
                         {info.winners > 1 ? `You share the prize with ${info.winners - 1} other ${info.winners === 2 ? "survivor" : "survivors"} — your share is about ` : "You take the prize pot of "}
-                        <span className="font-bold text-text">{formatMoney(prizeShare, info.pot.currency)}</span>. Your organiser will be in touch about the payout.
+                        <span className="font-bold text-white">{formatMoney(prizeShare, info.pot.currency)}</span>. Your organiser will be in touch about the payout.
                       </p>
                     </section>
                   );
@@ -239,24 +298,25 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
 
                 if (entry.status === "ELIMINATED") {
                   return (
-                    <section key={entry.id} className="rounded-2xl bg-error/5 p-6 shadow-sm ring-1 ring-error/30">
+                    <section key={entry.id} className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a0f0f] to-[#170a0a] p-6 text-white shadow-sm ring-1 ring-error/30">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="font-bold text-text">Entry #{entry.number}</h3>
-                        <span className="rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-error">knocked out</span>
+                        <span className="inline-block -rotate-3 rounded border-2 border-error px-2.5 py-0.5 font-mono text-sm font-extrabold uppercase tracking-widest text-error">Eliminated</span>
+                        <p className="text-xs font-bold text-white/50">Entry #{entry.number}</p>
                       </div>
-                      <p className="mt-2 text-sm text-text-secondary">
+                      <p className="mt-3 text-sm text-white/80">
                         {eliminationPick
-                          ? `${eliminationPick.team.name} let you down in ${eliminationPick.gameweek.name}.`
+                          ? <>Your pick — <span className="font-bold text-white">{eliminationPick.team.name}</span> — let you down in {eliminationPick.gameweek.name}.</>
                           : "This entry was knocked out."}
                         {streak > 0 ? ` A good run though — you survived ${streak} ${streak === 1 ? "round" : "rounds"}.` : ""}
                       </p>
                       {buyBackAvailable && (
-                        <div className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3">
-                          <p className="text-sm font-bold text-text">Get back in the game for {formatMoney(competition.entryFeeCents, competition.currency)}</p>
-                          <p className="mt-1 text-sm text-text-secondary">One buy-back is allowed per entry — pay your organiser and they&apos;ll bring this entry back to life. Every buy-back means more for the club too.</p>
+                        <div className="mt-4 rounded-2xl border border-accent/30 bg-gradient-to-br from-nav to-[#0f2419] px-5 py-4 text-center">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-accent/80">Not done yet</p>
+                          <p className="mt-0.5 font-mono text-2xl font-extrabold uppercase text-white">Buy back in</p>
+                          <p className="mt-1 text-xs text-white/70">Pay your organiser {formatMoney(competition.entryFeeCents, competition.currency)} and this entry is straight back in the game.</p>
                         </div>
                       )}
-                      <p className="mt-4 text-xs text-text-secondary">Teams used: {usedNames.join(", ") || "None"}</p>
+                      <p className="mt-4 text-xs text-white/50">Teams used: {usedNames.join(", ") || "None"}</p>
                     </section>
                   );
                 }
@@ -279,7 +339,11 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                       <div className="flex items-center gap-2.5">
                         <h3 className="font-bold text-text">Entry #{entry.number}</h3>
                         <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">in the game</span>
-                        {streak > 0 && <span className="rounded-full bg-accent/20 px-2.5 py-1 text-xs font-bold text-nav">🔥 {streak}-round streak</span>}
+                        {streak > 0 && (
+                          <span className="flex items-center gap-1 rounded-full bg-accent/20 px-2.5 py-1 text-xs font-bold text-nav">
+                            <FlameIcon className="text-warning" /> {streak}-round streak
+                          </span>
+                        )}
                         {entry.buyBackCount > 0 && <span className="rounded-full bg-border px-2.5 py-1 text-xs font-semibold text-text-secondary">buy-back</span>}
                       </div>
                       {gameweek && (
@@ -317,23 +381,46 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                           <p className="mt-4 text-sm text-text-secondary">The deadline has passed — picks for {gameweek.name} are locked.</p>
                         ) : (
                           <form action={submitPick} className="mt-4 space-y-2">
+                            <div className="mb-1 flex flex-wrap gap-3 text-[11px] font-semibold text-text-secondary">
+                              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> Available</span>
+                              <span className="flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg> Already used — shows round &amp; date</span>
+                              <span className="flex items-center gap-1"><ShieldIcon className="text-warning" /> Top group used</span>
+                            </div>
                             <input type="hidden" name="entryId" value={entry.id} />
                             {gameweek.fixtures.map((fixture) => {
-                              const renderTeam = (team: { id: string; name: string }) => {
+                              const renderTeam = (team: { id: string; name: string; shortName: string | null }) => {
                                 const isPicked = pick?.teamId === team.id;
                                 const canPick = eligible.has(team.id);
+                                const initials = teamInitials(team.name, team.shortName);
                                 if (isPicked) {
                                   return (
-                                    <span className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-3 text-sm font-bold text-white shadow-sm">
-                                      ✓ {team.name}
+                                    <span className="relative flex w-full flex-col items-center gap-1 rounded-xl border-2 border-primary bg-primary/10 px-3 py-2.5">
+                                      <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                                      </span>
+                                      <span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-[11px] font-extrabold text-white">{initials}</span>
+                                      <span className="text-xs font-extrabold text-text">{team.name}</span>
+                                      <span className="text-[9px] font-extrabold uppercase tracking-wide text-primary">Your pick</span>
                                     </span>
                                   );
                                 }
                                 if (!canPick) {
+                                  const usedPick = usedPickByTeam.get(team.id);
                                   return (
-                                    <span className="flex w-full flex-col items-center rounded-xl bg-background px-3 py-2 text-sm font-medium text-text-secondary/60 line-through">
-                                      {team.name}
-                                      <span className="text-[10px] font-semibold uppercase tracking-wide no-underline">{usedIds.has(team.id) ? "already used" : "top-6 used"}</span>
+                                    <span className="relative flex w-full flex-col items-center gap-1 rounded-xl bg-background px-3 py-2.5 opacity-70">
+                                      {usedPick && <XMarkBadge />}
+                                      <span className={`grid h-8 w-8 place-items-center rounded-full text-[11px] font-extrabold ${usedPick ? "bg-error/10 text-error/70" : "bg-warning/15 text-warning"}`}>{initials}</span>
+                                      <span className="text-xs font-bold text-text-secondary">{team.name}</span>
+                                      {usedPick ? (
+                                        <span className="flex flex-col items-center leading-tight">
+                                          <span className="text-[9px] font-extrabold uppercase tracking-wide text-error">{usedPick.gameweek.name}</span>
+                                          <span className="text-[9px] font-semibold text-text-secondary/70">{kickoffFormat(usedPick.gameweek.startsAt)}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-wide text-warning">
+                                          <ShieldIcon /> Top group used
+                                        </span>
+                                      )}
                                     </span>
                                   );
                                 }
@@ -341,9 +428,11 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                                   <button
                                     name="teamId"
                                     value={team.id}
-                                    className="w-full rounded-xl border border-border bg-white px-3 py-3 text-sm font-bold text-text transition hover:border-primary hover:bg-primary/5 hover:text-primary"
+                                    className="flex w-full flex-col items-center gap-1 rounded-xl border border-border bg-white px-3 py-2.5 transition hover:border-primary hover:bg-primary/5"
                                   >
-                                    {team.name}
+                                    <span className="grid h-8 w-8 place-items-center rounded-full bg-nav/10 text-[11px] font-extrabold text-nav">{initials}</span>
+                                    <span className="text-xs font-bold text-text">{team.name}</span>
+                                    <span className="text-[9px] font-extrabold uppercase tracking-wide text-success">Available</span>
                                   </button>
                                 );
                               };

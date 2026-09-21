@@ -11,6 +11,7 @@ const publicLinks = [
   { href: "/fixtures", label: "Fixtures" },
   { href: "/rules", label: "Rules" },
   { href: "/standings", label: "Standings" },
+  { href: "/leaderboard", label: "Leaderboard" },
   { href: "/selections", label: "Selections" },
 ];
 
