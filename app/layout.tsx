@@ -69,19 +69,19 @@ export default async function RootLayout({
         style={(clubTheme as React.CSSProperties | null) ?? undefined}
       >
         <PwaRegister />
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-nav/95 shadow-lg backdrop-blur">
+        <header className="border-b border-white/10 bg-nav/95 shadow-lg backdrop-blur md:sticky md:top-0 md:z-30">
           <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
             <HeaderLogo href={session?.user ? "/my-entries" : "/"} />
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-bold tracking-tight text-white md:text-xl">
                 Last Man Standing
               </h1>
-              <p className="mt-0.5 hidden text-xs text-white/55 sm:block">
+              <p className="mt-0.5 hidden text-xs text-white/55 md:block">
                 Fundraising competition platform · v{APP_VERSION}
               </p>
             </div>
           </div>
-          <Nav isAuthenticated={Boolean(session?.user)} isOrganiser={isOrganiser} isPlatform={isPlatform} />
+          <div className="hidden md:block"><Nav isAuthenticated={Boolean(session?.user)} isOrganiser={isOrganiser} isPlatform={isPlatform} /></div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-6 pb-32 md:py-8 md:pb-8">{children}</main>
         <footer className="mx-auto max-w-6xl px-4 pb-36 md:pb-10">

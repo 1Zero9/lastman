@@ -58,17 +58,24 @@ export async function ensureJoinCode(competitionId: string, existing: string | n
 type Db = PrismaClient | Prisma.TransactionClient;
 
 export async function getPublicSeason() {
-  const competition = await prisma.competition.findFirst({ where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" } });
+  const competition = await prisma.competition.findFirst({
+    where: { status: "ACTIVE" },
+    orderBy: { createdAt: "desc" },
+    include: { seasons: { orderBy: { createdAt: "desc" }, take: 1, include: { league: true } } },
+  });
+  const season = competition?.seasons[0];
   if (!competition) return null;
-  const season = await prisma.season.findFirst({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" }, include: { league: true } });
   if (!season) return null;
   return { competition, season };
 }
 
 export async function getSeasonBySlug(slug: string) {
-  const competition = await prisma.competition.findFirst({ where: { slug, status: { not: "DRAFT" } } });
+  const competition = await prisma.competition.findFirst({
+    where: { slug, status: { not: "DRAFT" } },
+    include: { seasons: { orderBy: { createdAt: "desc" }, take: 1, include: { league: true } } },
+  });
+  const season = competition?.seasons[0];
   if (!competition) return null;
-  const season = await prisma.season.findFirst({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" }, include: { league: true } });
   if (!season) return null;
   return { competition, season };
 }
