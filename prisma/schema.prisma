@@ -129,6 +129,7 @@ model Competition {
   clubName             String?
   clubWebsite          String?
   clubColor            String?
+  clubLogoUrl          String?
   welcomeMessage       String?
   prizePercentage      Int                 @default(30)
   fundraisingPercentage Int                @default(70)

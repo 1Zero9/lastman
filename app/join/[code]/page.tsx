@@ -126,12 +126,23 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
 
   return (
     <div className="mx-auto max-w-xl">
-      <p className="text-sm font-semibold uppercase tracking-wide text-primary">{competition.clubName ?? "Last Man Standing"}</p>
+      <div className="flex items-center gap-3">
+        {competition.clubLogoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={competition.clubLogoUrl} alt={`${competition.clubName ?? competition.name} logo`} className="h-12 w-12 shrink-0 rounded-xl border border-border bg-white object-contain p-1" />
+        )}
+        <p className="text-sm font-semibold uppercase tracking-wide text-primary">{competition.clubName ?? "Last Man Standing"}</p>
+      </div>
       <h1 className="mt-2 text-3xl font-bold text-text">Join {competition.name}</h1>
       <p className="mt-3 text-text-secondary">
         {season.name} · {fee} per entry · pick one team each round and be the last one standing.
-        {competition.welcomeMessage ? ` ${competition.welcomeMessage}` : ""}
       </p>
+      {competition.description && <p className="mt-3 text-text-secondary">{competition.description}</p>}
+      {competition.clubWebsite && (
+        <a href={competition.clubWebsite} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex text-sm font-semibold text-primary underline">
+          Visit {competition.clubName ?? "the club"} website
+        </a>
+      )}
 
       <form action={joinCompetition} className="mt-8 space-y-5 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
         <input type="hidden" name="code" value={code} />

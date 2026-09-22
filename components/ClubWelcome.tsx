@@ -10,6 +10,7 @@ export function ClubWelcome({
   clubName,
   clubWebsite,
   clubColor,
+  clubLogoUrl,
   welcomeMessage,
 }: {
   competitionId: string;
@@ -17,6 +18,7 @@ export function ClubWelcome({
   clubName: string;
   clubWebsite?: string | null;
   clubColor?: string | null;
+  clubLogoUrl?: string | null;
   welcomeMessage?: string | null;
 }) {
   const storageKey = `club-welcome-${competitionId}`;
@@ -40,6 +42,10 @@ export function ClubWelcome({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-nav/70 px-4 backdrop-blur-sm" role="dialog" aria-modal="true">
       <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="px-7 pb-6 pt-8 text-center text-white" style={{ backgroundColor: accent }}>
+          {clubLogoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={clubLogoUrl} alt={`${clubName} logo`} className="mx-auto mb-3 h-14 w-14 rounded-xl border border-white/30 bg-white object-contain p-1" />
+          )}
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">A message from</p>
           <p className="mt-2 text-2xl font-extrabold leading-tight">{clubName}</p>
         </div>

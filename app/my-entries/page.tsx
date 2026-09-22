@@ -182,6 +182,7 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
           clubName={welcomeParticipant.competition.clubName!}
           clubWebsite={welcomeParticipant.competition.clubWebsite}
           clubColor={welcomeParticipant.competition.clubColor}
+          clubLogoUrl={welcomeParticipant.competition.clubLogoUrl}
           welcomeMessage={welcomeParticipant.competition.welcomeMessage}
         />
       )}
