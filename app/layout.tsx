@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -93,6 +94,10 @@ export default async function RootLayout({
               <Link href="/disclaimer" className="font-semibold hover:text-primary">Disclaimer</Link>
               <Link href="/rules" className="font-semibold hover:text-primary">Rules</Link>
             </div>
+            <a href="https://www.1zero9.com" target="_blank" rel="noopener noreferrer" aria-label="Built by 1Zero9" className="flex items-center gap-2 font-semibold hover:text-primary">
+              <Image src="/109-logo-circle1.png" alt="" width={28} height={28} className="h-7 w-7" />
+              Built by 1Zero9
+            </a>
           </div>
         </footer>
         <MobileTabBar isAuthenticated={Boolean(session?.user)} isOrganiser={isOrganiser} isPlatform={isPlatform} />

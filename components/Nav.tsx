@@ -10,9 +10,6 @@ const publicLinks = [
   { href: "/", label: "Home" },
   { href: "/fixtures", label: "Fixtures" },
   { href: "/rules", label: "Rules" },
-  { href: "/standings", label: "Standings" },
-  { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/selections", label: "Selections" },
 ];
 
 type NavigationLink = { href: string; label: string; nested?: boolean };
@@ -22,7 +19,13 @@ export function Nav({ isAuthenticated, isOrganiser = false, isPlatform = false }
   const [open, setOpen] = useState(false);
   const links: NavigationLink[] = [
     ...publicLinks,
-    ...(isAuthenticated ? [{ href: "/my-entries", label: "My entries" }, { href: "/account", label: "My account" }] : []),
+    ...(isAuthenticated ? [
+      { href: "/my-entries", label: "My entries" },
+      { href: "/standings", label: "Standings" },
+      { href: "/leaderboard", label: "Leaderboard" },
+      { href: "/selections", label: "Selections" },
+      { href: "/account", label: "My account" },
+    ] : []),
     ...(isOrganiser ? [{ href: "/admin", label: "Admin", nested: true }] : []),
     ...(isPlatform ? [{ href: "/platform", label: "Platform" }] : []),
   ];

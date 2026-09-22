@@ -10,7 +10,7 @@ export function getPublicFixtures(slug: string) {
   return unstable_cache(
     async () => {
       const competition = await prisma.competition.findFirst({
-        where: { slug, status: { not: "DRAFT" } },
+        where: { slug, status: "ACTIVE" },
         include: { seasons: { orderBy: { createdAt: "desc" }, take: 1, include: { league: true } } },
       });
       const season = competition?.seasons[0];

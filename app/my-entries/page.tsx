@@ -300,7 +300,6 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                 const streak = entry.picks.filter((pick) => pick.outcome === "WIN").length;
                 // A voided round is a bye — it doesn't burn the team, so it's excluded from "used" everywhere below.
                 const countedPicks = entry.picks.filter((pick) => pick.outcome !== "VOID");
-                const usedIds = new Set(countedPicks.map((pick) => pick.teamId));
                 const usedPickByTeam = new Map(countedPicks.map((item) => [item.teamId, item]));
                 const usedNames = [...countedPicks].sort((a, b) => a.gameweek.number - b.gameweek.number).map((pick) => pick.team.name);
                 const gameweek = info.openGameweek;

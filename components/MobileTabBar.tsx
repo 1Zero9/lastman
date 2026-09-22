@@ -27,7 +27,7 @@ export function MobileTabBar({
     : [
         { href: "/", label: "Home", icon: "account" as const, exact: true },
         { href: "/fixtures", label: "Fixtures", icon: "fixtures" as const, exact: true },
-        { href: "/standings", label: "Standings", icon: "standings" as const, exact: true },
+        { href: "/sign-in", label: "Sign in", icon: "account" as const, exact: true },
         { href: "/rules", label: "Rules", icon: "rules" as const, exact: true },
       ];
 

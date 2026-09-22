@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getPotSummary, getSeasonBySlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
 import { PotSummary } from "@/components/PotSummary";
+import { requireCompetitionAccess } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ const statusStyles: Record<string, string> = {
 
 export default async function StandingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  await requireCompetitionAccess(slug);
   const context = await getSeasonBySlug(slug);
   if (!context) notFound();
   const { competition, season } = context;

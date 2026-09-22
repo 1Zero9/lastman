@@ -27,6 +27,24 @@ export async function requireSignedInUser() {
   return session.user;
 }
 
+// Competition dashboards contain entrant names, pick outcomes and fundraising totals.
+// A valid account is not enough: the viewer must belong to the competition.
+export async function requireCompetitionAccess(slug: string) {
+  const user = await requireSignedInUser();
+  const [participant, membership] = await Promise.all([
+    prisma.participant.findFirst({
+      where: { userId: user.id, anonymisedAt: null, competition: { slug, status: { not: "ARCHIVED" } } },
+      select: { id: true },
+    }),
+    prisma.competitionMember.findFirst({
+      where: { userId: user.id, competition: { slug, status: { not: "ARCHIVED" } } },
+      select: { id: true },
+    }),
+  ]);
+  if (!participant && !membership) redirect("/my-entries");
+  return user;
+}
+
 export async function requirePlatformAccess() {
   const user = await requireSignedInUser();
   const platformUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { platformRole: true, email: true, displayName: true, id: true } });
