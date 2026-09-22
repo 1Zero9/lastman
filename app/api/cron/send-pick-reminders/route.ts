@@ -47,6 +47,8 @@ export async function GET(request: NextRequest) {
         playerName: entry.participant.name,
         competitionName: gameweek.season.competition.name,
         clubName: gameweek.season.competition.clubName,
+        clubLogoUrl: gameweek.season.competition.clubLogoUrl,
+        clubColor: gameweek.season.competition.clubColor,
         gameweekName: gameweek.name,
         deadlineLabel: formatInTimeZone(gameweek.deadlineAt, gameweek.season.competition.timezone, "EEE d MMM, HH:mm zzz"),
         entryNumber: entry.number,

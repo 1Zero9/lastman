@@ -13,28 +13,44 @@ const statusStyles: Record<string, string> = {
   CANCELLED: "bg-error/10 text-error",
 };
 
+type GameweekMeta = {
+  id: string;
+  number: number;
+  name: string;
+  status: keyof typeof statusStyles;
+  deadlineAt: Date;
+  _count: { fixtures: number };
+};
+
 export default async function FixturesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const context = await getSeasonBySlug(slug);
   if (!context) notFound();
   const { competition, season } = context;
-  const gameweeks = await prisma.gameweek.findMany({
+
+  const gameweekMeta = await prisma.gameweek.findMany({
     where: { seasonId: season.id },
-    include: { fixtures: { include: { homeTeam: true, awayTeam: true }, orderBy: { kickoffAt: "asc" } } },
+    select: { id: true, number: true, name: true, status: true, deadlineAt: true, _count: { select: { fixtures: true } } },
     orderBy: { number: "asc" },
   });
 
   const formatDate = (date: Date) => formatInTimeZone(date, competition.timezone, "EEE d MMM, HH:mm");
-  const nextDraftGameweekId = gameweeks.find((gameweek) => gameweek.status === "DRAFT")?.id;
-  const highlightedIds = new Set(
-    gameweeks
-      .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
-      .map((gameweek) => gameweek.id),
-  );
-  const activeGameweeks = gameweeks.filter((gameweek) => highlightedIds.has(gameweek.id));
-  const otherGameweeks = gameweeks.filter((gameweek) => !highlightedIds.has(gameweek.id));
+  const nextDraftGameweekId = gameweekMeta.find((gameweek) => gameweek.status === "DRAFT")?.id;
+  const highlightedIds = gameweekMeta
+    .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
+    .map((gameweek) => gameweek.id);
+  const otherGameweeks = gameweekMeta.filter((gameweek) => !highlightedIds.includes(gameweek.id));
 
-  const renderGameweek = (gameweek: (typeof gameweeks)[number]) => (
+  // Full fixture + team detail only for the handful shown open by default — the collapsed set below
+  // (usually most of a season) is metadata-only, same fix as admin/schedule: a public, unauthenticated
+  // page shouldn't pay for every round's fixtures+teams on every single load.
+  const activeGameweeks = await prisma.gameweek.findMany({
+    where: { id: { in: highlightedIds } },
+    include: { fixtures: { include: { homeTeam: true, awayTeam: true }, orderBy: { kickoffAt: "asc" } } },
+    orderBy: { number: "asc" },
+  });
+
+  const renderGameweek = (gameweek: (typeof activeGameweeks)[number]) => (
     <article key={gameweek.id} className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
         <div className="flex items-center gap-2">
@@ -61,6 +77,16 @@ export default async function FixturesPage({ params }: { params: Promise<{ slug:
     </article>
   );
 
+  const renderSummaryRow = (gameweek: GameweekMeta) => (
+    <div key={gameweek.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface px-5 py-4 shadow-sm ring-1 ring-border">
+      <div className="flex items-center gap-2">
+        <span className="font-bold text-text">{gameweek.name}</span>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[gameweek.status]}`}>{gameweek.status.toLowerCase()}</span>
+      </div>
+      <p className="text-sm text-text-secondary">{gameweek._count.fixtures} fixture{gameweek._count.fixtures === 1 ? "" : "s"} · deadline {formatDate(gameweek.deadlineAt)}</p>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -68,7 +94,7 @@ export default async function FixturesPage({ params }: { params: Promise<{ slug:
         <p className="mt-1 text-sm text-text-secondary">{competition.name} · {season.name}{season.league ? ` · ${season.league.name}` : ""}</p>
       </div>
 
-      {gameweeks.length === 0 && <div className="rounded-2xl bg-surface p-8 text-text-secondary ring-1 ring-border">Fixtures will appear once the organiser publishes the schedule.</div>}
+      {gameweekMeta.length === 0 && <div className="rounded-2xl bg-surface p-8 text-text-secondary ring-1 ring-border">Fixtures will appear once the organiser publishes the schedule.</div>}
 
       <div className="space-y-6">
         {activeGameweeks.map(renderGameweek)}
@@ -77,7 +103,7 @@ export default async function FixturesPage({ params }: { params: Promise<{ slug:
             <summary className="cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-semibold text-text-secondary">
               {otherGameweeks.length} more gameweek{otherGameweeks.length === 1 ? "" : "s"}{" "}(upcoming &amp; settled) — click to show
             </summary>
-            <div className="mt-2 space-y-6 p-2">{otherGameweeks.map(renderGameweek)}</div>
+            <div className="mt-2 space-y-3 p-2">{otherGameweeks.map(renderSummaryRow)}</div>
           </details>
         )}
       </div>
