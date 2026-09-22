@@ -4,6 +4,47 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+function anonymisedParticipantData() {
+  return {
+    name: "Removed entrant",
+    email: null,
+    phone: null,
+    club: null,
+    location: null,
+    inviteToken: null,
+    userId: null,
+    anonymisedAt: new Date(),
+  };
+}
+
+async function withdrawLeaderboardHistory(formData: FormData) {
+  "use server";
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/sign-in");
+  const participantId = String(formData.get("participantId") ?? "");
+  const participant = await prisma.participant.findFirst({
+    where: { id: participantId, anonymisedAt: null, OR: [{ userId: session.user.id }, { email: session.user.email ?? undefined }] },
+    include: { entries: { include: { season: { select: { status: true } } } } },
+  });
+  if (!participant) throw new Error("This competition record is no longer available.");
+
+  const hasActiveSeason = participant.entries.some((entry) => ["OPEN", "IN_PROGRESS"].includes(entry.season.status));
+  await prisma.$transaction(async (tx) => {
+    await tx.consentRecord.updateMany({
+      where: { participantId: participant.id, purpose: "LEADERBOARD_HISTORY", revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (!hasActiveSeason) {
+      await tx.participant.update({ where: { id: participant.id }, data: anonymisedParticipantData() });
+      await tx.auditEvent.create({
+        data: { competitionId: participant.competitionId, type: "participant.history_consent_withdrawn", entityType: "Participant", entityId: participant.id },
+      });
+    }
+  });
+  redirect("/account?historyWithdrawn=1");
+}
+
 async function deleteMyData(formData: FormData) {
   "use server";
 
@@ -59,7 +100,8 @@ async function deleteMyData(formData: FormData) {
   redirect("/api/auth/signout");
 }
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ historyWithdrawn?: string }> }) {
+  const { historyWithdrawn } = await searchParams;
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/sign-in");
 
@@ -89,6 +131,7 @@ export default async function AccountPage() {
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <h2 className="font-bold text-white">Your competitions &amp; consents</h2>
+        {historyWithdrawn && <p className="mt-3 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">Historical leaderboard consent withdrawn. Where the competition is already over, your named record has been anonymised.</p>}
         {participants.length === 0 ? (
           <p className="mt-3 text-sm text-white/50">No competition entries are linked to this account yet.</p>
         ) : (
@@ -103,6 +146,12 @@ export default async function AccountPage() {
                     <li key={consent.purpose} className="text-accent">✓ <span className="text-white/70">{consentLabels[consent.purpose] ?? consent.purpose}</span> <span className="text-xs text-white/40">(v{consent.policyVersion})</span></li>
                   ))}
                 </ul>
+                {participant.consents.some((consent) => consent.purpose === "LEADERBOARD_HISTORY") && (
+                  <form action={withdrawLeaderboardHistory} className="mt-3">
+                    <input type="hidden" name="participantId" value={participant.id} />
+                    <button className="text-sm font-semibold text-red-300 underline underline-offset-4">Remove me from historical leaderboards</button>
+                  </form>
+                )}
               </div>
             ))}
           </div>

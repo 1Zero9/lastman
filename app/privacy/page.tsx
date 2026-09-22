@@ -21,7 +21,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-bold">What we collect and why</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li><span className="font-semibold">Name and email</span> — to identify your entry, show you in the standings, and let you sign in and make picks. Lawful basis: your consent, given when you confirm your entry.</li>
+          <li><span className="font-semibold">Name and email</span> — to identify your entry, show you in the standings, and let you sign in and make picks. We use this to provide and administer the competition you join.</li>
           <li><span className="font-semibold">Club and location (optional)</span> — to help organisers understand who is taking part. Only stored if you provide them.</li>
           <li><span className="font-semibold">Picks and results</span> — the record of the competition itself.</li>
           <li><span className="font-semibold">Payment records</span> — the organiser records whether your offline entry fee was received. No card or bank details ever touch this app.</li>
@@ -29,20 +29,24 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-bold">Optional consents</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li><span className="font-semibold">Leaderboard history</span> — if you opt in, your results are kept after the season to build all-time leaderboards. If you don&apos;t, they are anonymised when your data is removed.</li>
+          <li><span className="font-semibold">Leaderboard history</span> — this is optional and unticked by default. If you opt in, we keep the limited result needed for historical leaderboards (your displayed name, entry outcome and season result) for up to three years after your last relevant season ends. You can withdraw this on your account page at any time.</li>
           <li><span className="font-semibold">Future contact</span> — if you opt in, your organiser may contact you about future fundraisers or app updates. You can withdraw at any time.</li>
         </ul>
 
         <h2 className="text-lg font-bold">Retention</h2>
         <p>
-          Personal data is deleted or anonymised 12 months after the season ends, unless you opted into leaderboard
-          history or a new season is running. Anonymised competition records (picks and results without names) may be
-          kept so past seasons still add up.
+          We automatically delete or anonymise personal data 12 months after your last relevant season ends. If you
+          opted into leaderboard history, the limited historical result described above is retained for up to three
+          years instead. Withdrawing that option removes your named historic record as soon as you are no longer in an
+          active season. Anonymised competition records (such as season totals, picks and results without a person&apos;s
+          identity) may be kept so past seasons still add up. We may retain the minimum information needed to meet a
+          legal obligation or deal with a legal claim, where that applies.
         </p>
 
         <h2 className="text-lg font-bold">Your rights</h2>
         <p>
-          You can ask for a copy of your data, correct it, or have it removed at any time (right to be forgotten).
+          You can ask for a copy of your data, correct it, withdraw optional consent, or have it removed at any time
+          (right to be forgotten).
           If you have an account, use the tools on your <Link href="/account" className="font-semibold text-primary underline">account page</Link>.
           Otherwise contact your competition organiser, who can remove you from the admin dashboard. Removal anonymises
           your name and contact details while keeping the competition maths intact.

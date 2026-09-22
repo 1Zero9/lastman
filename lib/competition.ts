@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const POLICY_VERSION = "2026-07-17";
+export const POLICY_VERSION = "2026-09-22";
 
 export const defaultRules = {
   format: { mode: "survival" },
