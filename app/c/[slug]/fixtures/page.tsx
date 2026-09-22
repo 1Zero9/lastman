@@ -75,7 +75,7 @@ export default async function FixturesPage({ params }: { params: Promise<{ slug:
         {otherGameweeks.length > 0 && (
           <details className="rounded-2xl bg-surface p-2 shadow-sm ring-1 ring-border">
             <summary className="cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-semibold text-text-secondary">
-              {otherGameweeks.length} more gameweek{otherGameweeks.length === 1 ? "" : "s"} (upcoming &amp; settled) — click to show
+              {otherGameweeks.length} more gameweek{otherGameweeks.length === 1 ? "" : "s"}{" "}(upcoming &amp; settled) — click to show
             </summary>
             <div className="mt-2 space-y-6 p-2">{otherGameweeks.map(renderGameweek)}</div>
           </details>
