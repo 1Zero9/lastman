@@ -103,6 +103,24 @@ async function changeGameweekStatus(formData: FormData) {
   revalidatePath("/admin/schedule");
 }
 
+async function deleteDraftGameweek(formData: FormData) {
+  "use server";
+
+  const { user, competition } = await getAdminContext();
+  const gameweekId = String(formData.get("gameweekId") ?? "");
+  const gameweek = await prisma.gameweek.findFirst({ where: { id: gameweekId, season: { competitionId: competition.id } } });
+  if (!gameweek) throw new Error("Gameweek not found.");
+  if (gameweek.status !== "DRAFT") throw new Error("Only a draft gameweek — one that's never been opened — can be deleted.");
+
+  await prisma.$transaction([
+    prisma.gameweek.delete({ where: { id: gameweek.id } }),
+    prisma.auditEvent.create({
+      data: { competitionId: competition.id, actorId: user.id, type: "gameweek.deleted", entityType: "Gameweek", entityId: gameweek.id, payload: { name: gameweek.name, number: gameweek.number } },
+    }),
+  ]);
+  revalidatePath("/admin/schedule");
+}
+
 function formatDate(date: Date, timezone: string) {
   return formatInTimeZone(date, timezone, "EEE d MMM yyyy, HH:mm zzz");
 }
@@ -132,11 +150,17 @@ function GameweekCard({ gameweek, timezone }: { gameweek: GameweekWithFixtures; 
         </div>
         <div className="flex gap-2">
           {gameweek.status === "DRAFT" && (
-            <form action={changeGameweekStatus}>
-              <input type="hidden" name="gameweekId" value={gameweek.id} />
-              <input type="hidden" name="action" value="open" />
-              <button className="rounded-lg bg-success px-3 py-2 text-sm font-semibold text-white">Open gameweek</button>
-            </form>
+            <>
+              <form action={changeGameweekStatus}>
+                <input type="hidden" name="gameweekId" value={gameweek.id} />
+                <input type="hidden" name="action" value="open" />
+                <button className="rounded-lg bg-success px-3 py-2 text-sm font-semibold text-white">Open gameweek</button>
+              </form>
+              <form action={deleteDraftGameweek}>
+                <input type="hidden" name="gameweekId" value={gameweek.id} />
+                <button className="rounded-lg border border-error/40 px-3 py-2 text-sm font-semibold text-error" title="Delete this draft gameweek — only possible before it's ever opened">Delete</button>
+              </form>
+            </>
           )}
           {gameweek.status === "OPEN" && (
             <form action={changeGameweekStatus}>

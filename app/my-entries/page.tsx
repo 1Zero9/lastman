@@ -135,6 +135,7 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
     total: number;
     winners: number;
     lastSettledNumber: number | null;
+    lastSettledWipeout: string | null;
     gameweekTotal: number;
     seasonOrdinal: number;
     pot: { raisedCents: number; prizeCents: number; clubCents: number; currency: string };
@@ -147,11 +148,18 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
         const [openGameweek, statusGroups, lastSettled, pot, gameweekTotal, seasonOrdinal] = await Promise.all([
           getOpenGameweek(entry.seasonId),
           prisma.entry.groupBy({ by: ["status"], where: { seasonId: entry.seasonId, status: { not: "VOID" } }, _count: { _all: true } }),
-          prisma.gameweek.findFirst({ where: { seasonId: entry.seasonId, status: "SETTLED" }, orderBy: { number: "desc" }, select: { number: true } }),
+          prisma.gameweek.findFirst({ where: { seasonId: entry.seasonId, status: "SETTLED" }, orderBy: { number: "desc" }, select: { id: true, number: true } }),
           getPotSummary(entry.seasonId, participant.competition),
           prisma.gameweek.count({ where: { seasonId: entry.seasonId } }),
           prisma.season.count({ where: { competitionId: entry.season.competitionId, createdAt: { lte: entry.season.createdAt } } }),
         ]);
+        const lastSettledEvent = lastSettled
+          ? await prisma.auditEvent.findFirst({
+              where: { entityType: "Gameweek", entityId: lastSettled.id, type: "gameweek.settled" },
+              orderBy: { createdAt: "desc" },
+              select: { payload: true },
+            })
+          : null;
         const count = (status: string) => statusGroups.find((group) => group.status === status)?._count._all ?? 0;
         seasonInfo.set(entry.seasonId, {
           openGameweek,
@@ -159,6 +167,7 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
           total: statusGroups.reduce((sum, group) => sum + group._count._all, 0),
           winners: count("WINNER"),
           lastSettledNumber: lastSettled?.number ?? null,
+          lastSettledWipeout: (lastSettledEvent?.payload as { wipeout?: string } | null)?.wipeout ?? null,
           gameweekTotal,
           seasonOrdinal,
           pot,
@@ -207,6 +216,10 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
           const season = entries[0].season;
           const rules = season.rules as Rules;
           const myLive = entries.filter((entry) => entry.status === "ACTIVE" || entry.status === "WINNER").length;
+          const needsPick = Boolean(
+            info.openGameweek &&
+              entries.some((entry) => entry.status === "ACTIVE" && !entry.picks.some((pick) => pick.gameweekId === info.openGameweek!.id)),
+          );
           const chancePct = info.alive > 0 ? Math.round((myLive / info.alive) * 100) : 0;
           const joinUrl = competition.joinCode ? `https://${host}/join/${competition.joinCode}` : null;
           const shareText = myLive > 0
@@ -245,7 +258,13 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                 seasonOrdinal={info.seasonOrdinal}
               />
 
-              {info.openGameweek && new Date() < info.openGameweek.deadlineAt && (
+              {info.lastSettledWipeout === "rollover" && (
+                <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text">
+                  <span className="font-bold text-warning">Round {info.lastSettledNumber} wiped out everyone left.</span> With the field that size, no one&apos;s actually eliminated — every entry that lost got rolled back to active for the next round.
+                </div>
+              )}
+
+              {needsPick && info.openGameweek && new Date() < info.openGameweek.deadlineAt && (
                 <PickCountdownBanner
                   deadline={info.openGameweek.deadlineAt.toISOString()}
                   deadlineLabel={formatInTimeZone(info.openGameweek.deadlineAt, competition.timezone, "EEE HH:mm")}
@@ -271,9 +290,11 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
 
               {entries.map((entry) => {
                 const streak = entry.picks.filter((pick) => pick.outcome === "WIN").length;
-                const usedIds = new Set(entry.picks.map((pick) => pick.teamId));
-                const usedPickByTeam = new Map(entry.picks.map((item) => [item.teamId, item]));
-                const usedNames = [...entry.picks].sort((a, b) => a.gameweek.number - b.gameweek.number).map((pick) => pick.team.name);
+                // A voided round is a bye — it doesn't burn the team, so it's excluded from "used" everywhere below.
+                const countedPicks = entry.picks.filter((pick) => pick.outcome !== "VOID");
+                const usedIds = new Set(countedPicks.map((pick) => pick.teamId));
+                const usedPickByTeam = new Map(countedPicks.map((item) => [item.teamId, item]));
+                const usedNames = [...countedPicks].sort((a, b) => a.gameweek.number - b.gameweek.number).map((pick) => pick.team.name);
                 const gameweek = info.openGameweek;
                 const pick = gameweek ? entry.picks.find((item) => item.gameweekId === gameweek.id) : undefined;
                 const eligible = eligibleByEntry.get(entry.id) ?? new Set<string>();
@@ -283,12 +304,21 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                 const prizeShare = info.winners > 0 ? Math.floor(info.pot.prizeCents / info.winners) : info.pot.prizeCents;
 
                 if (entry.status === "WINNER") {
+                  const lastPick = [...entry.picks].sort((a, b) => b.gameweek.number - a.gameweek.number)[0];
+                  const wonOnAWipeout = lastPick && lastPick.outcome !== "WIN";
                   return (
                     <section key={entry.id} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-nav to-[#0a1a12] p-6 text-white shadow-lg ring-2 ring-accent">
                       <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/20 blur-2xl" />
                       <p className="text-4xl">🏆</p>
                       <h3 className="mt-2 font-mono text-3xl font-extrabold uppercase tracking-tight text-accent drop-shadow-[0_0_18px_rgba(163,230,53,0.35)]">Last one standing!</h3>
                       <p className="mt-1 text-sm font-bold text-white/70">Entry #{entry.number}</p>
+                      {wonOnAWipeout && (
+                        <p className="mt-3 text-xs font-semibold text-white/60">
+                          {info.winners > 1
+                            ? `Everyone still in came unstuck on ${lastPick.gameweek.name} — with no one left active, the remaining entries split the win.`
+                            : `${lastPick.team.name} let you down on ${lastPick.gameweek.name} too — but you were the last entry standing, so you still take it.`}
+                        </p>
+                      )}
                       <p className="mt-3 text-sm text-white/85">
                         {info.winners > 1 ? `You share the prize with ${info.winners - 1} other ${info.winners === 2 ? "survivor" : "survivors"} — your share is about ` : "You take the prize pot of "}
                         <span className="font-bold text-white">{formatMoney(prizeShare, info.pot.currency)}</span>. Your organiser will be in touch about the payout.

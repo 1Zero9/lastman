@@ -121,6 +121,25 @@ async function updatePayment(formData: FormData) {
   revalidatePath("/admin/people");
 }
 
+async function reopenPayment(formData: FormData) {
+  "use server";
+
+  const { user, competition } = await getAdminContext();
+  const paymentId = String(formData.get("paymentId") ?? "");
+  const payment = await prisma.payment.findFirst({ where: { id: paymentId, season: { competitionId: competition.id }, status: "REJECTED" } });
+  if (!payment) throw new Error("Payment was not found or is not rejected.");
+
+  await prisma.$transaction([
+    prisma.payment.update({ where: { id: payment.id }, data: { status: "PENDING", receivedAt: null } }),
+    prisma.auditEvent.create({
+      data: { competitionId: competition.id, actorId: user.id, type: "payment.reopened", entityType: "Payment", entityId: payment.id },
+    }),
+  ]);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/people");
+}
+
 async function recordBuyBack(formData: FormData) {
   "use server";
 
@@ -191,6 +210,7 @@ export default async function PeoplePage() {
   ]);
 
   const pendingPayments = payments.filter((payment) => payment.status === "PENDING");
+  const rejectedPayments = payments.filter((payment) => payment.status === "REJECTED");
 
   const sellerStats = new Map<string | null, { paid: number; unpaid: number }>();
   let totalSoldCents = 0;
@@ -274,6 +294,27 @@ export default async function PeoplePage() {
         <div className="flex items-baseline justify-between gap-4"><h2 className="text-lg font-bold text-text">Awaiting payment</h2><span className="text-sm text-text-secondary">{pendingPayments.length} pending</span></div>
         {pendingPayments.length === 0 ? <p className="mt-4 text-sm text-text-secondary">No payments are awaiting confirmation.</p> : <div className="mt-4 space-y-3">{pendingPayments.map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background p-4"><div><p className="font-semibold text-text">{payment.participant.name}</p><p className="text-sm text-text-secondary">{payment.entryCount} {payment.entryCount === 1 ? "entry" : "entries"} · {formatMoney(payment.amountCents, competition.currency)}{payment.reference ? ` · ref: ${payment.reference}` : ""}</p></div><div className="flex gap-2"><form action={updatePayment}><input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="action" value="reject" /><button className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-text">Reject</button></form><form action={updatePayment}><input type="hidden" name="paymentId" value={payment.id} /><input type="hidden" name="action" value="confirm" /><button className="rounded-lg bg-success px-3 py-2 text-sm font-semibold text-white">Confirm payment</button></form></div></div>)}</div>}
       </section>
+
+      {rejectedPayments.length > 0 && (
+        <section className="rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
+          <div className="flex items-baseline justify-between gap-4"><h2 className="text-lg font-bold text-text">Rejected payments</h2><span className="text-sm text-text-secondary">{rejectedPayments.length} rejected</span></div>
+          <p className="mt-1 text-sm text-text-secondary">Rejected by mistake, or the entrant paid after all? Reopen it to send it back to &quot;Awaiting payment&quot;.</p>
+          <div className="mt-4 space-y-3">
+            {rejectedPayments.map((payment) => (
+              <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background p-4">
+                <div>
+                  <p className="font-semibold text-text">{payment.participant.name}</p>
+                  <p className="text-sm text-text-secondary">{payment.entryCount} {payment.entryCount === 1 ? "entry" : "entries"} · {formatMoney(payment.amountCents, competition.currency)}{payment.reference ? ` · ref: ${payment.reference}` : ""}</p>
+                </div>
+                <form action={reopenPayment}>
+                  <input type="hidden" name="paymentId" value={payment.id} />
+                  <button className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-text hover:border-primary hover:text-primary">Reopen</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-border">
         <div className="border-b border-border px-6 py-5"><h2 className="text-lg font-bold text-text">People and entries</h2></div>

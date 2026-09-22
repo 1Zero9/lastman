@@ -6,7 +6,10 @@ type Rules = {
   restrictedTeamGroup?: string[];
   format?: { mode?: "survival" | "ranked_out" };
   buyBack?: { enabled?: boolean; maxPerEntry?: number };
+  wipeout?: { splitPrizeAtOrBelowEntries?: number };
 };
+
+const DEFAULT_WIPEOUT_SPLIT_THRESHOLD = 5;
 
 export function formatMode(rules: Rules) {
   return rules.format?.mode ?? "survival";
@@ -18,10 +21,13 @@ function assertSupportedFormat(rules: Rules) {
 }
 
 export async function eligibleTeamIds(db: Db, entryId: string, gameweekId: string, rules: Rules) {
-  const [fixtures, history] = await Promise.all([
+  const [fixtures, allHistory] = await Promise.all([
     db.fixture.findMany({ where: { gameweekId }, select: { homeTeamId: true, awayTeamId: true } }),
     db.pick.findMany({ where: { entryId }, include: { team: { select: { name: true } } } }),
   ]);
+  // A voided round is a bye: it must not burn the team the player picked, nor
+  // count toward their one-shot restricted-group allowance for the season.
+  const history = allHistory.filter((pick) => pick.outcome !== "VOID");
   const candidates = new Set(fixtures.flatMap((fixture) => [fixture.homeTeamId, fixture.awayTeamId]));
   const usedIds = new Set(history.map((pick) => pick.teamId));
   const restricted = new Set(rules.restrictedTeamGroup ?? []);
@@ -66,8 +72,10 @@ export async function lockGameweek(db: Db, gameweekId: string, actorId?: string)
 
 export async function settleGameweek(db: Db, gameweekId: string, actorId?: string) {
   const gameweek = await db.gameweek.findUniqueOrThrow({ where: { id: gameweekId }, include: { season: { include: { competition: true } }, fixtures: true } });
-  if (gameweek.status !== "LOCKED" || gameweek.fixtures.some((fixture) => fixture.status !== "FINISHED")) throw new Error("All fixtures must be finished before settlement.");
-  assertSupportedFormat(gameweek.season.rules as Rules);
+  if (gameweek.status !== "LOCKED") throw new Error("Only a locked gameweek can be settled.");
+  if (gameweek.fixtures.some((fixture) => fixture.status !== "FINISHED")) throw new Error("Every fixture in this round needs a final score before it can be settled.");
+  const rules = gameweek.season.rules as Rules;
+  assertSupportedFormat(rules);
   const picks = await db.pick.findMany({ where: { gameweekId }, include: { entry: true } });
   const fixtures = gameweek.fixtures;
   const defeated: string[] = [];
@@ -80,10 +88,17 @@ export async function settleGameweek(db: Db, gameweekId: string, actorId?: strin
     if (outcome !== "WIN" && pick.entry.status === "ACTIVE") { await db.entry.update({ where: { id: pick.entryId }, data: { status: "ELIMINATED", eliminatedGameweekId: gameweek.id } }); defeated.push(pick.entryId); }
   }
   let wipeout: string | null = null;
-  const alive = await db.entry.count({ where: { seasonId: gameweek.seasonId, status: "ACTIVE" } });
-  if (alive === 0 && defeated.length) {
-    if (defeated.length <= 5) { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "WINNER" } }); await db.season.update({ where: { id: gameweek.seasonId }, data: { status: "COMPLETED" } }); wipeout = "split_winners"; }
+  const stillActive = await db.entry.findMany({ where: { seasonId: gameweek.seasonId, status: "ACTIVE" }, select: { id: true } });
+  if (stillActive.length === 0 && defeated.length) {
+    // Everyone left lost this round together — either the sole finalist losing (still wins, nobody
+    // else is left) or a genuine mass wipeout. Both are the same shape: split threshold decides which.
+    const splitThreshold = rules.wipeout?.splitPrizeAtOrBelowEntries ?? DEFAULT_WIPEOUT_SPLIT_THRESHOLD;
+    if (defeated.length <= splitThreshold) { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "WINNER" } }); await db.season.update({ where: { id: gameweek.seasonId }, data: { status: "COMPLETED" } }); wipeout = "split_winners"; }
     else { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "ACTIVE", eliminatedGameweekId: null } }); wipeout = "rollover"; }
+  } else if (stillActive.length === 1) {
+    // The last entry standing won its pick outright — the season is over even though no wipeout fired.
+    await db.entry.update({ where: { id: stillActive[0].id }, data: { status: "WINNER" } });
+    await db.season.update({ where: { id: gameweek.seasonId }, data: { status: "COMPLETED" } });
   }
   await db.gameweek.update({ where: { id: gameweek.id }, data: { status: "SETTLED" } });
   await db.auditEvent.create({ data: { competitionId: gameweek.season.competitionId, actorId, type: "gameweek.settled", entityType: "Gameweek", entityId: gameweek.id, payload: { eliminated: defeated.length, wipeout } } });
