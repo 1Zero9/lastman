@@ -26,7 +26,7 @@ export function Nav({ isAuthenticated, isOrganiser = false, isPlatform = false }
     ...(isOrganiser ? [{ href: "/admin", label: "Admin", nested: true }] : []),
     ...(isPlatform ? [{ href: "/platform", label: "Platform" }] : []),
   ];
-  const pill = (href: string, exact = true) => `rounded-full px-4 py-1.5 text-sm font-medium transition-all ${(exact ? pathname === href : pathname.startsWith(href)) ? "bg-white text-primary shadow-sm" : "text-white/65 hover:bg-white/10 hover:text-white"}`;
+  const pill = (href: string, exact = true) => `rounded-full px-4 py-1.5 text-sm font-medium transition-all ${(exact ? pathname === href : pathname.startsWith(href)) ? "bg-accent text-nav shadow-sm" : "text-white/65 hover:bg-white/10 hover:text-white"}`;
 
   return <>
     <nav className="hidden border-t border-white/10 bg-white/5 px-4 py-2 md:block" aria-label="Primary navigation">
@@ -47,11 +47,23 @@ export function Nav({ isAuthenticated, isOrganiser = false, isPlatform = false }
       <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="mobile-navigation" aria-label={open ? "Close navigation" : "Open navigation"} className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <NavIcon name={open ? "close" : "menu"} className="h-5 w-5" />
       </button>
-      {open && <nav id="mobile-navigation" aria-label="Mobile navigation" className="absolute right-0 mt-3 w-60 overflow-hidden rounded-2xl border border-white/10 bg-nav p-2 shadow-2xl shadow-black/30">
+      {open && <nav id="mobile-navigation" aria-label="Mobile navigation" className="absolute right-0 mt-3 w-60 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#0f2419] to-[#060a10] p-2 shadow-2xl shadow-black/30">
         <div className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Navigate</div>
         {links.map(({ href, label, nested }) => {
           const active = nested ? pathname.startsWith(href) : pathname === href;
-          return <Link key={href} href={href} onClick={() => setOpen(false)} className={`block rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-accent text-nav" : "text-white/75 hover:bg-white/10 hover:text-white"}`}>{label}</Link>;
+          const isLeaderboard = href === "/leaderboard";
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              className={`block rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                active ? "bg-accent text-nav" : isLeaderboard ? "text-warning hover:bg-warning/10" : "text-white/75 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              {label}
+            </Link>
+          );
         })}
         {isAuthenticated ? <div className="mt-1 border-t border-white/10 px-2 pt-2"><SignOutButton /></div> : <Link href="/sign-in" onClick={() => setOpen(false)} className="mt-1 block rounded-xl bg-accent px-3 py-2.5 text-sm font-bold text-nav">Sign in</Link>}
       </nav>}

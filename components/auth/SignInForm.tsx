@@ -29,39 +29,28 @@ export function SignInForm() {
     window.location.assign(result.url ?? "/");
   }
 
+  const inputClass =
+    "w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/15";
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label htmlFor="email" className="mb-1.5 block text-sm font-semibold text-text">
+        <label htmlFor="email" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-accent/80">
           Email address
         </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-text outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
-        />
+        <input id="email" name="email" type="email" autoComplete="email" required className={inputClass} />
       </div>
       <div>
-        <label htmlFor="password" className="mb-1.5 block text-sm font-semibold text-text">
+        <label htmlFor="password" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-accent/80">
           Password
         </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-text outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
-        />
+        <input id="password" name="password" type="password" autoComplete="current-password" required className={inputClass} />
       </div>
-      {error && <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">{error}</p>}
+      {error && <p role="alert" className="rounded-lg bg-error/15 px-3 py-2 text-sm font-medium text-red-300">{error}</p>}
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-full bg-accent px-4 py-3 font-bold text-nav shadow-[0_10px_24px_-8px_rgba(163,230,53,0.6)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSubmitting ? "Signing in…" : "Sign in"}
       </button>
