@@ -144,6 +144,22 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
         </a>
       )}
 
+      <div className="mt-6 grid grid-cols-2 gap-3 rounded-2xl bg-background p-5 sm:grid-cols-4">
+        {[
+          { n: 1, t: "Pick one team", d: "Every round, before the deadline." },
+          { n: 2, t: "Win to survive", d: "A draw or a loss and you're out." },
+          { n: 3, t: "No repeats", d: "Once a team's used, it's gone for the season." },
+          { n: 4, t: "Last one wins", d: "Takes the pot — the rest funds the club." },
+        ].map((step) => (
+          <div key={step.n}>
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">{step.n}</span>
+            <p className="mt-2 text-sm font-bold text-text">{step.t}</p>
+            <p className="mt-0.5 text-xs leading-5 text-text-secondary">{step.d}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-text-secondary">Want the full rules? See the <Link href="/guide" className="font-semibold text-primary underline">guide</Link>.</p>
+
       <form action={joinCompetition} className="mt-8 space-y-5 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
         <input type="hidden" name="code" value={code} />
         {error && <div className="rounded-xl border border-error/40 bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</div>}

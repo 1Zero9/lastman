@@ -29,7 +29,11 @@ const playerSteps: Item[] = [
   },
   {
     title: "Last one standing wins",
-    body: "The final surviving entry takes the winner's share of the pot; the rest goes to the club. If everyone left is knocked out in the same round, up to 5 survivors split the prize — with more than 5, everyone is reinstated and the game rolls on.",
+    body: "The final surviving entry takes the winner's share of the pot; the rest goes to the club. If everyone left is knocked out in the same round, a small enough field splits the prize between them — with a bigger field, everyone is reinstated and the game rolls on.",
+  },
+  {
+    title: "Check the streak leaderboard",
+    body: "See who's riding the longest run of correct picks on the Leaderboard page — it updates as each round settles.",
   },
 ];
 
@@ -41,6 +45,10 @@ const organiserSteps: Item[] = [
   {
     title: "Set up the fundraiser",
     body: "In the admin area, pick a source league, a run window, the entry fee, the prize split, buy-backs and autopick, plus your club name, website and colours. Every round and fixture in the window is created automatically, and the whole app takes on your club's colours.",
+  },
+  {
+    title: "Update your branding any time",
+    body: "Club name, logo, website, colour and the \"about this fundraiser\" story aren't locked in at setup — edit them any time from Club branding & details in the admin area.",
   },
   {
     title: "Share the join link",
