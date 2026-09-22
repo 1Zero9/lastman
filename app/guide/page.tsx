@@ -91,21 +91,21 @@ const platformItems: Item[] = [
   },
 ];
 
-function Section({ id, badge, title, intro, items }: { id: string; badge: string; title: string; intro: string; items: Item[] }) {
+function Section({ id, badge, title, intro, items, gold = false }: { id: string; badge: string; title: string; intro: string; items: Item[]; gold?: boolean }) {
   return (
-    <section id={id} className="scroll-mt-24 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border">
-      <p className="text-sm font-semibold uppercase tracking-wide text-primary">{badge}</p>
-      <h2 className="mt-1 text-xl font-bold text-text">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-text-secondary">{intro}</p>
+    <section id={id} className={`scroll-mt-24 rounded-2xl border p-6 ${gold ? "border-warning/30 bg-warning/[0.06]" : "border-white/10 bg-white/5"}`}>
+      <p className={`text-sm font-semibold uppercase tracking-wide ${gold ? "text-warning" : "text-accent"}`}>{badge}</p>
+      <h2 className="mt-1 text-xl font-bold text-white">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-white/60">{intro}</p>
       <ol className="mt-5 space-y-4">
         {items.map((item, index) => (
           <li key={item.title} className="flex gap-4">
-            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+            <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${gold ? "bg-warning text-nav" : "bg-accent text-nav"}`}>
               {index + 1}
             </span>
             <div>
-              <p className="font-semibold text-text">{item.title}</p>
-              <p className="mt-1 text-sm leading-6 text-text-secondary">{item.body}</p>
+              <p className="font-semibold text-white">{item.title}</p>
+              <p className="mt-1 text-sm leading-6 text-white/60">{item.body}</p>
             </div>
           </li>
         ))}
@@ -116,18 +116,18 @@ function Section({ id, badge, title, intro, items }: { id: string; badge: string
 
 export default function GuidePage() {
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-8 rounded-3xl bg-[radial-gradient(120%_60%_at_50%_-10%,#1c3a2e_0%,#0b1520_55%,#060a10_100%)] p-6 sm:p-8">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">Help</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-text">How Last Man Standing works</h1>
-        <p className="mt-3 text-text-secondary">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-accent">Help</p>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white">How Last Man Standing works</h1>
+        <p className="mt-3 text-white/60">
           One guide for everyone: players making their weekly pick, organisers running a club fundraiser, and
           platform admins keeping the lights on.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <a href="#players" className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Playing</a>
-          <a href="#organisers" className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold text-text">Organising</a>
-          <a href="#platform" className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold text-text">Platform admin</a>
+          <a href="#players" className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-nav">Playing</a>
+          <a href="#organisers" className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white">Organising</a>
+          <a href="#platform" className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white">Platform admin</a>
         </div>
       </div>
 
@@ -145,6 +145,7 @@ export default function GuidePage() {
         title="Running a fundraiser"
         intro="You run everything from the admin area: setup, players, payments, rounds and results. Money is always handled offline, directly between you and your players."
         items={organiserSteps}
+        gold
       />
 
       <Section
@@ -153,13 +154,14 @@ export default function GuidePage() {
         title="Platform administration"
         intro="A minimal, audited back-office for provisioning projects and recovering organiser access — with no view of participant data."
         items={platformItems}
+        gold
       />
 
-      <p className="text-sm text-text-secondary">
-        See also the <Link href="/rules" className="font-semibold text-primary underline">full rules</Link>, the{" "}
-        <Link href="/privacy" className="font-semibold text-primary underline">privacy policy</Link> and the{" "}
-        <Link href="/disclaimer" className="font-semibold text-primary underline">disclaimer</Link>. Ready to organise?{" "}
-        <Link href="/get-started" className="font-semibold text-primary underline">Get started</Link>.
+      <p className="text-sm text-white/50">
+        See also the <Link href="/rules" className="font-semibold text-accent underline">full rules</Link>, the{" "}
+        <Link href="/privacy" className="font-semibold text-accent underline">privacy policy</Link> and the{" "}
+        <Link href="/disclaimer" className="font-semibold text-accent underline">disclaimer</Link>. Ready to organise?{" "}
+        <Link href="/get-started" className="font-semibold text-accent underline">Get started</Link>.
       </p>
     </div>
   );

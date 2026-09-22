@@ -6,11 +6,11 @@ import { PotSummary } from "@/components/PotSummary";
 export const dynamic = "force-dynamic";
 
 const statusStyles: Record<string, string> = {
-  ACTIVE: "bg-success/10 text-success",
-  ELIMINATED: "bg-error/10 text-error",
-  WINNER: "bg-accent/20 text-nav",
-  PENDING_PAYMENT: "bg-warning/10 text-warning",
-  VOID: "bg-border text-text-secondary",
+  ACTIVE: "bg-accent/15 text-accent",
+  ELIMINATED: "bg-error/15 text-red-300",
+  WINNER: "bg-warning/20 text-warning",
+  PENDING_PAYMENT: "bg-white/10 text-white/60",
+  VOID: "bg-white/5 text-white/40",
 };
 
 export default async function StandingsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -39,21 +39,21 @@ export default async function StandingsPage({ params }: { params: Promise<{ slug
   const alive = entries.filter((entry) => entry.status === "ACTIVE" || entry.status === "WINNER").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 rounded-3xl bg-[radial-gradient(120%_60%_at_50%_-10%,#1c3a2e_0%,#0b1520_55%,#060a10_100%)] p-6 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-text">Standings</h1>
-          <p className="mt-1 text-sm text-text-secondary">{competition.name} · {season.name}{season.league ? ` · ${season.league.name}` : ""}</p>
+          <h1 className="text-2xl font-extrabold text-white">Standings</h1>
+          <p className="mt-1 text-sm text-white/50">{competition.name} · {season.name}{season.league ? ` · ${season.league.name}` : ""}</p>
         </div>
-        <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{alive} of {entries.length} still standing</span>
+        <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{alive} of {entries.length} still standing</span>
       </div>
 
       <PotSummary {...pot} />
 
-      <div className="overflow-x-auto rounded-2xl shadow-sm ring-1 ring-border">
-        <table className="min-w-full divide-y divide-border text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-white/10">
+        <table className="min-w-full divide-y divide-white/10 text-left text-sm">
           <thead>
-            <tr className="bg-nav text-white">
+            <tr className="bg-black/30 text-white">
               <th className="px-4 py-3 font-semibold">Entrant</th>
               <th className="px-4 py-3 font-semibold">Entry</th>
               {revealedGameweeks.map((gameweek) => (
@@ -62,9 +62,9 @@ export default async function StandingsPage({ params }: { params: Promise<{ slug
               <th className="px-4 py-3 font-semibold">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border bg-surface">
+          <tbody className="divide-y divide-white/10 bg-white/5">
             {entries.length === 0 && (
-              <tr><td colSpan={3 + revealedGameweeks.length} className="px-4 py-6 text-text-secondary">No entries yet.</td></tr>
+              <tr><td colSpan={3 + revealedGameweeks.length} className="px-4 py-6 text-white/50">No entries yet.</td></tr>
             )}
             {entries.map((entry) => {
               const eliminated = entry.status === "ELIMINATED";
@@ -75,11 +75,11 @@ export default async function StandingsPage({ params }: { params: Promise<{ slug
                   : `${entry.participant.name} (unconfirmed)`;
               return (
                 <tr key={entry.id} className={eliminated ? "bg-error/5" : undefined}>
-                  <td className={`px-4 py-3 font-medium ${eliminated ? "text-text-secondary line-through" : "text-text"}`}>{displayName}</td>
-                  <td className="px-4 py-3 text-text-secondary">#{entry.number}{entry.buyBackCount > 0 ? " · buy-back" : ""}</td>
+                  <td className={`px-4 py-3 font-medium ${eliminated ? "text-white/40 line-through" : "text-white"}`}>{displayName}</td>
+                  <td className="px-4 py-3 text-white/50">#{entry.number}{entry.buyBackCount > 0 ? " · buy-back" : ""}</td>
                   {revealedGameweeks.map((gameweek) => {
                     const pick = entry.picks.find((item) => item.gameweekId === gameweek.id);
-                    const outcomeClass = pick?.outcome === "WIN" ? "text-success" : pick?.outcome === "PENDING" ? "text-text" : pick?.outcome === "VOID" ? "text-text-secondary" : "text-error";
+                    const outcomeClass = pick?.outcome === "WIN" ? "text-accent" : pick?.outcome === "PENDING" ? "text-white" : pick?.outcome === "VOID" ? "text-white/40" : "text-red-300";
                     return (
                       <td key={gameweek.id} className={`px-3 py-3 text-center font-medium ${outcomeClass}`}>
                         {pick ? pick.team.shortName ?? pick.team.name : "–"}
@@ -87,7 +87,7 @@ export default async function StandingsPage({ params }: { params: Promise<{ slug
                     );
                   })}
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[entry.status] ?? "bg-border text-text-secondary"}`}>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[entry.status] ?? "bg-white/10 text-white/50"}`}>
                       {entry.status.toLowerCase().replace("_", " ")}
                     </span>
                   </td>
@@ -97,7 +97,7 @@ export default async function StandingsPage({ params }: { params: Promise<{ slug
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-text-secondary">Picks are revealed once a round locks. Entrants appear after they confirm their entry.</p>
+      <p className="text-xs text-white/40">Picks are revealed once a round locks. Entrants appear after they confirm their entry.</p>
     </div>
   );
 }
