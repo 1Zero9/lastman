@@ -10,7 +10,10 @@
 
 - Invite entrants (share invite links).
 - Reconcile payments and create Entries per person.
-- Monitor non-submitters (use "Who hasn't picked?" in admin).
+- Non-submitters get an automatic reminder email (hourly cron, once per entry per gameweek) once the
+  deadline is within 24h — no manual chasing needed for that.
+- Rejected a payment by mistake, or it came through after all? Reopen it from "Rejected payments" on
+  the People page — sends it back to Awaiting payment.
 
 ## At deadline
 

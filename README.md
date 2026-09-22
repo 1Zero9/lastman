@@ -31,8 +31,12 @@ For the platform owner account, also set `BOOTSTRAP_USER_ROLE=PLATFORM_ADMIN`. A
 account may use `BREAKGLASS_SUPPORT`; it can provision or recover organiser access but is deliberately
 blocked from participant names, contact details, entries, and picks.
 
-Set a separate random `CRON_SECRET` in Vercel. The included hourly Vercel Cron request locks overdue open
-gameweeks and assigns eligibility-aware autopicks. Vercel sends this secret to the cron endpoint.
+Set a separate random `CRON_SECRET` in Vercel. Two hourly Vercel Cron jobs use it: one locks overdue open
+gameweeks and assigns eligibility-aware autopicks, the other sends pick-deadline reminder emails.
+
+Set `RESEND_API_KEY` (from [resend.com](https://resend.com)) to send reminder emails; the app degrades
+gracefully and simply skips sending if it's unset. Emails send from `lastman@1zero9.com` — that's a
+root-domain address on a Resend account limited to one verified domain, not a subdomain.
 
 Generate the client and create migrations locally:
 
@@ -74,6 +78,7 @@ git push -u origin main
 - **Decisions:** [docs/DECISIONS.md](docs/DECISIONS.md)
 - **Runbook:** [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - **Infra:** [infra/README.md](infra/README.md)
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ## Scripts
 
