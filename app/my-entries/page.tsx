@@ -173,12 +173,20 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
           pot,
         });
       }
-      const info = seasonInfo.get(entry.seasonId)!;
-      if (entry.status === "ACTIVE" && info.openGameweek) {
-        eligibleByEntry.set(entry.id, new Set(await eligibleTeamIds(prisma, entry.id, info.openGameweek.id, entry.season.rules as Rules)));
-      }
     }
   }
+
+  // One round trip per entry's eligibility check, fired together instead of one-by-one — this used to be a
+  // sequential await inside the loop above, which meant N entries meant N chained network round trips to the DB.
+  const entriesNeedingEligibility = participants.flatMap((participant) =>
+    participant.entries.filter((entry) => entry.status === "ACTIVE" && seasonInfo.get(entry.seasonId)?.openGameweek),
+  );
+  const eligibilityResults = await Promise.all(
+    entriesNeedingEligibility.map((entry) =>
+      eligibleTeamIds(prisma, entry.id, seasonInfo.get(entry.seasonId)!.openGameweek!.id, entry.season.rules as Rules),
+    ),
+  );
+  entriesNeedingEligibility.forEach((entry, index) => eligibleByEntry.set(entry.id, new Set(eligibilityResults[index])));
 
   const welcomeParticipant = participants.find((participant) => participant.confirmedAt && participant.approvedAt && !participant.anonymisedAt && participant.competition.clubName);
 

@@ -187,27 +187,58 @@ function GameweekCard({ gameweek, timezone }: { gameweek: GameweekWithFixtures; 
   );
 }
 
+type GameweekMeta = {
+  id: string;
+  number: number;
+  name: string;
+  status: keyof typeof statusClass;
+  startsAt: Date;
+  deadlineAt: Date;
+  _count: { fixtures: number };
+};
+
+// Rarely expanded (it's everything except the current round + the next draft), so it's rendered from
+// lightweight metadata only — no fixtures/teams join — to keep the page's default load cheap regardless
+// of how many gameweeks a season has accumulated.
+function GameweekSummaryRow({ gameweek, timezone }: { gameweek: GameweekMeta; timezone: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface px-6 py-4 shadow-sm ring-1 ring-border">
+      <div className="flex items-center gap-2">
+        <span className="font-bold text-text">{gameweek.name}</span>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[gameweek.status]}`}>{gameweek.status.toLowerCase()}</span>
+      </div>
+      <p className="text-sm text-text-secondary">{gameweek._count.fixtures} fixture{gameweek._count.fixtures === 1 ? "" : "s"} · deadline {formatDate(gameweek.deadlineAt, timezone)}</p>
+    </div>
+  );
+}
+
 export default async function SchedulePage() {
   const { competition } = await getAdminContext();
   const season = await prisma.season.findFirstOrThrow({ where: { competitionId: competition.id }, orderBy: { createdAt: "desc" } });
-  const [teams, gameweeks] = await Promise.all([
+  const [teams, gameweekMeta] = await Promise.all([
     prisma.team.findMany({ orderBy: { name: "asc" } }),
     prisma.gameweek.findMany({
       where: { seasonId: season.id },
-      include: { fixtures: { include: { homeTeam: true, awayTeam: true }, orderBy: { kickoffAt: "asc" } } },
+      select: { id: true, number: true, name: true, status: true, startsAt: true, deadlineAt: true, _count: { select: { fixtures: true } } },
       orderBy: { number: "asc" },
     }),
   ]);
-  const nextNumber = (gameweeks.at(-1)?.number ?? 0) + 1;
-  const draftGameweeks = gameweeks.filter((gameweek) => gameweek.status === "DRAFT");
+  const nextNumber = (gameweekMeta.at(-1)?.number ?? 0) + 1;
+  const draftGameweeks = gameweekMeta.filter((gameweek) => gameweek.status === "DRAFT");
   const nextDraftGameweekId = draftGameweeks[0]?.id;
-  const highlightedIds = new Set(
-    gameweeks
-      .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
-      .map((gameweek) => gameweek.id),
-  );
-  const activeGameweeks = gameweeks.filter((gameweek) => highlightedIds.has(gameweek.id));
-  const otherGameweeks = gameweeks.filter((gameweek) => !highlightedIds.has(gameweek.id));
+  const highlightedIds = gameweekMeta
+    .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
+    .map((gameweek) => gameweek.id);
+  const otherGameweeks = gameweekMeta.filter((gameweek) => !highlightedIds.includes(gameweek.id));
+
+  // Full fixture + team detail only for the handful of gameweeks actually rendered open by default —
+  // the collapsed "other" set below is metadata-only, so a season with 38+ rounds doesn't pay for
+  // 38 rounds' worth of fixture joins on every single page load.
+  const activeGameweeks = await prisma.gameweek.findMany({
+    where: { id: { in: highlightedIds } },
+    include: { fixtures: { include: { homeTeam: true, awayTeam: true }, orderBy: { kickoffAt: "asc" } } },
+    orderBy: { number: "asc" },
+  });
 
   return (
     <div className="space-y-8">
@@ -224,7 +255,7 @@ export default async function SchedulePage() {
       <section className="rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-border"><h2 className="text-lg font-bold text-text">Add fixture</h2>{draftGameweeks.length === 0 || teams.length < 2 ? <p className="mt-3 text-sm text-text-secondary">Create a draft gameweek and at least two teams before adding a fixture.</p> : <form action={createFixture} className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4"><select name="gameweekId" required className="rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary">{draftGameweeks.map((gameweek) => <option key={gameweek.id} value={gameweek.id}>{gameweek.name}</option>)}</select><select name="homeTeamId" required className="rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary"><option value="">Home team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select><select name="awayTeamId" required className="rounded-xl border border-border bg-white px-4 py-3 outline-none focus:border-primary"><option value="">Away team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select><input name="kickoffAt" type="datetime-local" required className="rounded-xl border border-border px-4 py-3 outline-none focus:border-primary" /><button className="w-fit rounded-xl bg-primary px-4 py-3 font-semibold text-white md:col-span-2 lg:col-span-4">Add fixture</button></form>}</section>
 
       <section className="space-y-4">
-        {gameweeks.length === 0 ? (
+        {gameweekMeta.length === 0 ? (
           <div className="rounded-2xl bg-surface p-8 text-sm text-text-secondary ring-1 ring-border">No gameweeks have been created yet.</div>
         ) : (
           <>
@@ -236,9 +267,9 @@ export default async function SchedulePage() {
                 <summary className="cursor-pointer select-none rounded-xl px-4 py-3 text-sm font-semibold text-text-secondary">
                   {otherGameweeks.length} more gameweek{otherGameweeks.length === 1 ? "" : "s"} (upcoming drafts &amp; settled rounds) — click to show
                 </summary>
-                <div className="mt-2 space-y-4 p-2">
+                <div className="mt-2 space-y-3 p-2">
                   {otherGameweeks.map((gameweek) => (
-                    <GameweekCard key={gameweek.id} gameweek={gameweek} timezone={competition.timezone} />
+                    <GameweekSummaryRow key={gameweek.id} gameweek={gameweek} timezone={competition.timezone} />
                   ))}
                 </div>
               </details>
