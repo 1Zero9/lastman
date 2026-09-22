@@ -1,7 +1,6 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { notFound } from "next/navigation";
-import { getSeasonBySlug } from "@/lib/competition";
-import { prisma } from "@/lib/prisma";
+import { getPublicFixtures } from "@/lib/public-fixtures";
 
 export const dynamic = "force-dynamic";
 
@@ -24,31 +23,13 @@ type GameweekMeta = {
 
 export default async function FixturesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const context = await getSeasonBySlug(slug);
-  if (!context) notFound();
-  const { competition, season } = context;
-
-  const gameweekMeta = await prisma.gameweek.findMany({
-    where: { seasonId: season.id },
-    select: { id: true, number: true, name: true, status: true, deadlineAt: true, _count: { select: { fixtures: true } } },
-    orderBy: { number: "asc" },
-  });
+  const fixtureData = await getPublicFixtures(slug);
+  if (!fixtureData) notFound();
+  const { competition, season, gameweekMeta, activeGameweeks } = fixtureData;
 
   const formatDate = (date: Date) => formatInTimeZone(date, competition.timezone, "EEE d MMM, HH:mm");
-  const nextDraftGameweekId = gameweekMeta.find((gameweek) => gameweek.status === "DRAFT")?.id;
-  const highlightedIds = gameweekMeta
-    .filter((gameweek) => gameweek.status === "OPEN" || gameweek.status === "LOCKED" || gameweek.id === nextDraftGameweekId)
-    .map((gameweek) => gameweek.id);
-  const otherGameweeks = gameweekMeta.filter((gameweek) => !highlightedIds.includes(gameweek.id));
-
-  // Full fixture + team detail only for the handful shown open by default — the collapsed set below
-  // (usually most of a season) is metadata-only, same fix as admin/schedule: a public, unauthenticated
-  // page shouldn't pay for every round's fixtures+teams on every single load.
-  const activeGameweeks = await prisma.gameweek.findMany({
-    where: { id: { in: highlightedIds } },
-    include: { fixtures: { include: { homeTeam: true, awayTeam: true }, orderBy: { kickoffAt: "asc" } } },
-    orderBy: { number: "asc" },
-  });
+  const activeGameweekIds = new Set(activeGameweeks.map((gameweek) => gameweek.id));
+  const otherGameweeks = gameweekMeta.filter((gameweek) => !activeGameweekIds.has(gameweek.id));
 
   const renderGameweek = (gameweek: (typeof activeGameweeks)[number]) => (
     <article key={gameweek.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">

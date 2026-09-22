@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { getAdminContext } from "@/lib/admin";
 import { lockGameweek, settleGameweek, voidGameweek } from "@/lib/engine";
 import { prisma } from "@/lib/prisma";
+import { publicFixturesTag } from "@/lib/public-fixtures";
 
 function fail(message: string): never {
   redirect(`/admin/results?error=${encodeURIComponent(message)}`);
@@ -20,6 +21,7 @@ async function lock(formData: FormData) {
   } catch (error) {
     fail(error instanceof Error ? error.message : "Could not lock this gameweek.");
   }
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/results");
 }
 
@@ -41,6 +43,7 @@ async function score(formData: FormData) {
       data: { competitionId: competition.id, actorId: user.id, type: "fixture.result_recorded", entityType: "Fixture", entityId: id, payload: { homeScore, awayScore } },
     });
   });
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/results");
 }
 
@@ -57,6 +60,7 @@ async function settle(formData: FormData) {
   } catch (error) {
     fail(error instanceof Error ? error.message : "Could not settle this gameweek.");
   }
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/results");
   revalidatePath("/my-entries");
   revalidatePath("/standings");
@@ -78,6 +82,7 @@ async function voidRound(formData: FormData) {
   } catch (error) {
     fail(error instanceof Error ? error.message : "Could not void this gameweek.");
   }
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/results");
   revalidatePath("/my-entries");
   revalidatePath("/standings");

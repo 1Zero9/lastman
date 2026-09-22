@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { getAdminContext } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { lockGameweek } from "@/lib/engine";
+import { publicFixturesTag } from "@/lib/public-fixtures";
 
 function asZonedDate(value: FormDataEntryValue | null, timezone: string) {
   const dateTime = String(value ?? "");
@@ -50,6 +51,7 @@ async function createGameweek(formData: FormData) {
   await prisma.auditEvent.create({
     data: { competitionId: competition.id, actorId: user.id, type: "gameweek.created", entityType: "Gameweek", entityId: gameweek.id, payload: { number, name, startsAt, deadlineAt } },
   });
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/schedule");
 }
 
@@ -69,6 +71,7 @@ async function createFixture(formData: FormData) {
   await prisma.auditEvent.create({
     data: { competitionId: competition.id, actorId: user.id, type: "fixture.created", entityType: "Fixture", entityId: fixture.id, payload: { gameweekId, homeTeamId, awayTeamId, kickoffAt } },
   });
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/schedule");
 }
 
@@ -90,6 +93,7 @@ async function changeGameweekStatus(formData: FormData) {
   } else if (action === "lock") {
     if (gameweek.status !== "OPEN") throw new Error("Only an open gameweek can be locked.");
     await prisma.$transaction((tx) => lockGameweek(tx, gameweek.id, user.id));
+    updateTag(publicFixturesTag(competition.slug));
     revalidatePath("/my-entries");
     revalidatePath("/admin/schedule");
     return;
@@ -100,6 +104,7 @@ async function changeGameweekStatus(formData: FormData) {
   await prisma.auditEvent.create({
     data: { competitionId: competition.id, actorId: user.id, type: `gameweek.${action}ed`, entityType: "Gameweek", entityId: gameweek.id, payload: { fixtureCount: gameweek._count.fixtures } },
   });
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/schedule");
 }
 
@@ -118,6 +123,7 @@ async function deleteDraftGameweek(formData: FormData) {
       data: { competitionId: competition.id, actorId: user.id, type: "gameweek.deleted", entityType: "Gameweek", entityId: gameweek.id, payload: { name: gameweek.name, number: gameweek.number } },
     }),
   ]);
+  updateTag(publicFixturesTag(competition.slug));
   revalidatePath("/admin/schedule");
 }
 
