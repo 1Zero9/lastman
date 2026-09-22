@@ -288,6 +288,7 @@ model Entry {
   season             Season       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   participant        Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
   picks              Pick[]
+  reminderDeliveries ReminderDelivery[]
 
   @@unique([seasonId, participantId, number])
   @@index([seasonId, status])
@@ -326,6 +327,7 @@ model Gameweek {
   season        Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   fixtures      Fixture[]
   picks         Pick[]
+  reminderDeliveries ReminderDelivery[]
 
   @@unique([seasonId, number])
   @@index([seasonId, status])
@@ -384,6 +386,23 @@ model Pick {
 
   @@unique([entryId, gameweekId])
   @@index([gameweekId, teamId])
+}
+
+// One durable claim per entry and gameweek prevents overlapping cron runs
+// from sending duplicate reminder emails. The same entry/gameweek pair also
+// supplies the stable provider idempotency key used by the reminder route.
+model ReminderDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  entryId    String   @db.Uuid
+  gameweekId String   @db.Uuid
+  emailId    String?
+  sentAt     DateTime?
+  createdAt  DateTime @default(now())
+  entry      Entry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  gameweek   Gameweek @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, gameweekId])
+  @@index([gameweekId])
 }
 
 model AuditEvent {

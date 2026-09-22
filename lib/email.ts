@@ -21,11 +21,12 @@ export async function sendPickReminderEmail(params: {
   deadlineLabel: string;
   entryNumber: number;
   appUrl: string;
+  idempotencyKey: string;
 }) {
   const resend = getClient();
   if (!resend) return { sent: false, reason: "RESEND_API_KEY is not configured" as const };
 
-  const { to, playerName, competitionName, clubName, clubLogoUrl, clubColor, gameweekName, deadlineLabel, entryNumber, appUrl } = params;
+  const { to, playerName, competitionName, clubName, clubLogoUrl, clubColor, gameweekName, deadlineLabel, entryNumber, appUrl, idempotencyKey } = params;
   const accent = /^#[0-9a-fA-F]{6}$/.test(clubColor ?? "") ? clubColor! : DEFAULT_ACCENT;
   const displayName = clubName ?? competitionName;
   const subject = `Pick reminder: ${gameweekName} closes ${deadlineLabel}`;
@@ -48,7 +49,10 @@ export async function sendPickReminderEmail(params: {
     </div>
   `.trim();
 
-  const result = await resend.emails.send({ from: FROM, to, subject, html });
+  const result = await resend.emails.send(
+    { from: FROM, to, subject, html },
+    { idempotencyKey },
+  );
   if (result.error) return { sent: false, reason: result.error.message };
   return { sent: true, id: result.data?.id };
 }
