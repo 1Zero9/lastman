@@ -87,6 +87,32 @@ async function submitPick(formData: FormData) {
   redirect(`/my-entries?saved=${encodeURIComponent(team.name)}`);
 }
 
+async function requestBuyBack(formData: FormData) {
+  "use server";
+
+  const user = await requireSignedInUser();
+  const entryId = String(formData.get("entryId") ?? "");
+  const entry = await prisma.entry.findFirst({
+    where: { id: entryId, participant: { userId: user.id }, status: "ELIMINATED" },
+    include: { season: { include: { competition: true } } },
+  });
+  if (!entry) fail("This entry is not available for a buy-back.");
+  if (isDemoCompetition(entry.season.competition.slug)) fail("The showcase competition is read-only.");
+  const rules = entry.season.rules as Rules;
+  const eliminatedGameweek = entry.eliminatedGameweekId
+    ? await prisma.gameweek.findUnique({ where: { id: entry.eliminatedGameweekId }, select: { number: true } })
+    : null;
+  const eligible = Boolean(rules.buyBack?.enabled) && entry.buyBackCount < (rules.buyBack?.maxPerEntry ?? 1) && (eliminatedGameweek?.number ?? Infinity) <= 2;
+  if (!eligible) fail("This entry is not eligible for a buy-back.");
+  if (entry.buyBackRequestedAt) fail("A buy-back for this entry has already been requested.");
+  await prisma.entry.update({ where: { id: entry.id }, data: { buyBackRequestedAt: new Date() } });
+  await prisma.auditEvent.create({
+    data: { competitionId: entry.season.competitionId, actorId: user.id, type: "entry.buyback_requested", entityType: "Entry", entityId: entry.id },
+  });
+  revalidatePath("/my-entries");
+  revalidatePath("/admin/people");
+}
+
 export default async function MyEntriesPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   const { error, saved } = await searchParams;
   const user = await requireSignedInUser();
@@ -142,19 +168,21 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
     gameweekTotal: number;
     seasonOrdinal: number;
     pot: { raisedCents: number; prizeCents: number; clubCents: number; currency: string };
+    earlyGameweekIds: Set<string>;
   }>();
   const eligibleByEntry = new Map<string, Set<string>>();
 
   for (const participant of participants) {
     for (const entry of participant.entries) {
       if (!seasonInfo.has(entry.seasonId)) {
-        const [openGameweek, statusGroups, lastSettled, pot, gameweekTotal, seasonOrdinal] = await Promise.all([
+        const [openGameweek, statusGroups, lastSettled, pot, gameweekTotal, seasonOrdinal, earlyGameweeks] = await Promise.all([
           getOpenGameweek(entry.seasonId),
           prisma.entry.groupBy({ by: ["status"], where: { seasonId: entry.seasonId, status: { not: "VOID" } }, _count: { _all: true } }),
           prisma.gameweek.findFirst({ where: { seasonId: entry.seasonId, status: "SETTLED" }, orderBy: { number: "desc" }, select: { id: true, number: true } }),
           getPotSummary(entry.seasonId, participant.competition),
           prisma.gameweek.count({ where: { seasonId: entry.seasonId } }),
           prisma.season.count({ where: { competitionId: entry.season.competitionId, createdAt: { lte: entry.season.createdAt } } }),
+          prisma.gameweek.findMany({ where: { seasonId: entry.seasonId, number: { lte: 2 } }, select: { id: true } }),
         ]);
         const lastSettledEvent = lastSettled
           ? await prisma.auditEvent.findFirst({
@@ -174,6 +202,7 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
           gameweekTotal,
           seasonOrdinal,
           pot,
+          earlyGameweekIds: new Set(earlyGameweeks.map((gw) => gw.id)),
         });
       }
     }
@@ -310,7 +339,7 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                 const eligible = eligibleByEntry.get(entry.id) ?? new Set<string>();
                 const deadlinePassed = gameweek ? new Date() >= gameweek.deadlineAt : false;
                 const eliminationPick = entry.eliminatedGameweekId ? entry.picks.find((item) => item.gameweekId === entry.eliminatedGameweekId) : undefined;
-                const buyBackAvailable = entry.status === "ELIMINATED" && rules.buyBack?.enabled && entry.buyBackCount < (rules.buyBack.maxPerEntry ?? 1) && season.status !== "COMPLETED";
+                const buyBackAvailable = entry.status === "ELIMINATED" && rules.buyBack?.enabled && entry.buyBackCount < (rules.buyBack.maxPerEntry ?? 1) && season.status !== "COMPLETED" && Boolean(entry.eliminatedGameweekId && info.earlyGameweekIds.has(entry.eliminatedGameweekId));
                 const prizeShare = info.winners > 0 ? Math.floor(info.pot.prizeCents / info.winners) : info.pot.prizeCents;
 
                 if (entry.status === "WINNER") {
@@ -354,7 +383,17 @@ export default async function MyEntriesPage({ searchParams }: { searchParams: Pr
                         <div className="mt-4 rounded-2xl border border-accent/30 bg-gradient-to-br from-nav to-[#0f2419] px-5 py-4 text-center">
                           <p className="text-[11px] font-bold uppercase tracking-wide text-accent/80">Not done yet</p>
                           <p className="mt-0.5 font-mono text-2xl font-extrabold uppercase text-white">Buy back in</p>
-                          <p className="mt-1 text-xs text-white/70">Pay your organiser {formatMoney(competition.entryFeeCents, competition.currency)} and this entry is straight back in the game.</p>
+                          {entry.buyBackRequestedAt ? (
+                            <p className="mt-1 text-xs text-white/70">Requested — pay your organiser {formatMoney(competition.entryFeeCents, competition.currency)} and they&apos;ll confirm it to put this entry straight back in the game.</p>
+                          ) : (
+                            <>
+                              <p className="mt-1 text-xs text-white/70">Only available for entries knocked out in the first two rounds. Request it here, then pay your organiser {formatMoney(competition.entryFeeCents, competition.currency)} — they&apos;ll confirm it to put this entry back in the game.</p>
+                              <form action={requestBuyBack} className="mt-3">
+                                <input type="hidden" name="entryId" value={entry.id} />
+                                <button className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-nav shadow-lg shadow-accent/20">Request buy-back</button>
+                              </form>
+                            </>
+                          )}
                         </div>
                       )}
                       <p className="mt-4 text-xs text-white/50">Teams used: {usedNames.join(", ") || "None"}</p>

@@ -1,9 +1,11 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { getAdminContext } from "@/lib/admin";
-import { lockGameweek, settleGameweek, voidGameweek } from "@/lib/engine";
+import { lockGameweek, voidGameweek } from "@/lib/engine";
 import { prisma } from "@/lib/prisma";
 import { publicFixturesTag } from "@/lib/public-fixtures";
+import { settleGameweekAndNotify } from "@/lib/round-settlement";
 
 function fail(message: string): never {
   redirect(`/admin/results?error=${encodeURIComponent(message)}`);
@@ -54,9 +56,10 @@ async function settle(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const gameweek = await prisma.gameweek.findFirst({ where: { id, season: { competitionId: competition.id } } });
   if (!gameweek) fail("Gameweek not found.");
+  const appUrl = `https://${(await headers()).get("host") ?? "lastman.1zero9.com"}`;
   let result: { eliminated: number; wipeout: string | null };
   try {
-    result = await prisma.$transaction((tx) => settleGameweek(tx, id, user.id));
+    result = await settleGameweekAndNotify(id, appUrl, user.id);
   } catch (error) {
     fail(error instanceof Error ? error.message : "Could not settle this gameweek.");
   }

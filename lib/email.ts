@@ -57,6 +57,76 @@ export async function sendPickReminderEmail(params: {
   return { sent: true, id: result.data?.id };
 }
 
+export async function sendEliminationEmail(params: {
+  to: string;
+  playerName: string;
+  competitionName: string;
+  entryNumber: number;
+  gameweekName: string;
+  buyBackUrl: string | null;
+  appUrl: string;
+}) {
+  const resend = getClient();
+  if (!resend) return { sent: false, reason: "RESEND_API_KEY is not configured" as const };
+
+  const { to, playerName, competitionName, entryNumber, gameweekName, buyBackUrl, appUrl } = params;
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #ffffff;">
+      <div style="background: #141413; padding: 28px 24px; text-align: center; border-radius: 16px 16px 0 0;">
+        <p style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0;">Last Man Standing</p>
+      </div>
+      <div style="padding: 28px 24px; color: #141413; border: 1px solid #eee; border-top: none; border-radius: 0 0 16px 16px;">
+        <h1 style="font-size: 18px; margin: 0 0 14px;">Hi ${escapeHtml(playerName)}, you're out this time</h1>
+        <p style="font-size: 14px; line-height: 22px; color: #444; margin: 0;">
+          Entry #${entryNumber} in <strong>${escapeHtml(competitionName)}</strong> didn't survive <strong>${escapeHtml(gameweekName)}</strong>.
+          ${buyBackUrl ? "You're still within the buy-back window — you can pay to get this entry straight back into the game." : "Thanks for playing this one — keep an eye out for the next fundraiser."}
+        </p>
+        ${buyBackUrl ? `<a href="${buyBackUrl}" style="display: inline-block; margin-top: 20px; padding: 12px 22px; background: ${DEFAULT_ACCENT}; color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; border-radius: 10px;">Buy back in</a>` : `<a href="${appUrl}/my-entries" style="display: inline-block; margin-top: 20px; padding: 12px 22px; background: ${DEFAULT_ACCENT}; color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; border-radius: 10px;">View my entries</a>`}
+        <p style="margin-top: 28px; font-size: 11px; color: #999;">Last Man Standing · unofficial fundraising tool · money is handled offline by your organiser</p>
+      </div>
+    </div>
+  `.trim();
+
+  const result = await resend.emails.send({ from: FROM, to, subject: `Eliminated from ${competitionName} — ${gameweekName}`, html });
+  if (result.error) return { sent: false, reason: result.error.message };
+  return { sent: true, id: result.data?.id };
+}
+
+export async function sendRoundAnnouncementEmail(params: {
+  to: string;
+  organiserName: string;
+  competitionName: string;
+  gameweekName: string;
+  survivorCount: number;
+  extended: boolean;
+  adminUrl: string;
+}) {
+  const resend = getClient();
+  if (!resend) return { sent: false, reason: "RESEND_API_KEY is not configured" as const };
+
+  const { to, organiserName, competitionName, gameweekName, survivorCount, extended, adminUrl } = params;
+  const body = extended
+    ? `${survivorCount} entries are still standing after ${escapeHtml(gameweekName)} — more than your split threshold, so the next round has been added automatically and play continues. If you'd rather stop here and split the pot between the remaining ${survivorCount} entries instead, you can do that from the admin dashboard.`
+    : `${survivorCount} entries are still standing after ${escapeHtml(gameweekName)}, and there are no more fixtures left in the source schedule to extend with. You'll need to settle the season from the admin dashboard — most likely splitting the pot between the remaining ${survivorCount} entries.`;
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #ffffff;">
+      <div style="background: #141413; padding: 28px 24px; text-align: center; border-radius: 16px 16px 0 0;">
+        <p style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0;">Last Man Standing</p>
+      </div>
+      <div style="padding: 28px 24px; color: #141413; border: 1px solid #eee; border-top: none; border-radius: 0 0 16px 16px;">
+        <h1 style="font-size: 18px; margin: 0 0 14px;">Hi ${escapeHtml(organiserName)}, ${escapeHtml(competitionName)} needs a call</h1>
+        <p style="font-size: 14px; line-height: 22px; color: #444; margin: 0;">${body}</p>
+        <a href="${adminUrl}" style="display: inline-block; margin-top: 20px; padding: 12px 22px; background: ${DEFAULT_ACCENT}; color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; border-radius: 10px;">Open the dashboard</a>
+        <p style="margin-top: 28px; font-size: 11px; color: #999;">Last Man Standing · unofficial fundraising tool · money is handled offline by your organiser</p>
+      </div>
+    </div>
+  `.trim();
+
+  const result = await resend.emails.send({ from: FROM, to, subject: `${competitionName}: ${survivorCount} left after ${gameweekName}`, html });
+  if (result.error) return { sent: false, reason: result.error.message };
+  return { sent: true, id: result.data?.id };
+}
+
 export async function sendPasswordResetEmail(params: { to: string; name: string; resetUrl: string }) {
   const resend = getClient();
   if (!resend) return { sent: false, reason: "RESEND_API_KEY is not configured" as const };

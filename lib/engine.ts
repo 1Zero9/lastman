@@ -1,7 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
-type Rules = {
+export type Rules = {
   noTeamRepeats?: boolean;
   restrictedTeamGroup?: string[];
   format?: { mode?: "survival" | "ranked_out" };
@@ -18,6 +18,18 @@ export function formatMode(rules: Rules) {
 function assertSupportedFormat(rules: Rules) {
   const mode = formatMode(rules);
   if (mode !== "survival") throw new Error(`The "${mode}" format is not supported yet. Only "survival" competitions can be settled.`);
+}
+
+// Buy-back is only a way back in from an early exit, not a running escape hatch for
+// the rest of the season — restricted to an entry eliminated in the first two rounds.
+// Takes the eliminated gameweek's own round number, not its id, since
+// Entry.eliminatedGameweekId isn't a Prisma relation.
+export function isBuyBackEligible(entry: { status: string; buyBackCount: number }, eliminatedGameweekNumber: number | null, rules: Rules) {
+  if (!rules.buyBack?.enabled) return false;
+  if (entry.status !== "ELIMINATED") return false;
+  if (entry.buyBackCount >= (rules.buyBack.maxPerEntry ?? 1)) return false;
+  if (eliminatedGameweekNumber === null || eliminatedGameweekNumber > 2) return false;
+  return true;
 }
 
 export async function eligibleTeamIds(db: Db, entryId: string, gameweekId: string, rules: Rules) {
@@ -88,21 +100,47 @@ export async function settleGameweek(db: Db, gameweekId: string, actorId?: strin
     if (outcome !== "WIN" && pick.entry.status === "ACTIVE") { await db.entry.update({ where: { id: pick.entryId }, data: { status: "ELIMINATED", eliminatedGameweekId: gameweek.id } }); defeated.push(pick.entryId); }
   }
   let wipeout: string | null = null;
+  let seasonCompleted = false;
+  let rolledOverEntryIds: string[] = [];
   const stillActive = await db.entry.findMany({ where: { seasonId: gameweek.seasonId, status: "ACTIVE" }, select: { id: true } });
   if (stillActive.length === 0 && defeated.length) {
     // Everyone left lost this round together — either the sole finalist losing (still wins, nobody
     // else is left) or a genuine mass wipeout. Both are the same shape: split threshold decides which.
     const splitThreshold = rules.wipeout?.splitPrizeAtOrBelowEntries ?? DEFAULT_WIPEOUT_SPLIT_THRESHOLD;
-    if (defeated.length <= splitThreshold) { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "WINNER" } }); await db.season.update({ where: { id: gameweek.seasonId }, data: { status: "COMPLETED" } }); wipeout = "split_winners"; }
-    else { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "ACTIVE", eliminatedGameweekId: null } }); wipeout = "rollover"; }
+    if (defeated.length <= splitThreshold) { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "WINNER" } }); await db.season.update({ where: { id: gameweek.seasonId }, data: { status: "COMPLETED" } }); wipeout = "split_winners"; seasonCompleted = true; }
+    else { await db.entry.updateMany({ where: { id: { in: defeated } }, data: { status: "ACTIVE", eliminatedGameweekId: null } }); wipeout = "rollover"; rolledOverEntryIds = defeated; }
   } else if (stillActive.length === 1) {
     // The last entry standing won its pick outright — the season is over even though no wipeout fired.
     await db.entry.update({ where: { id: stillActive[0].id }, data: { status: "WINNER" } });
     await db.season.update({ where: { id: gameweek.seasonId }, data: { status: "COMPLETED" } });
+    seasonCompleted = true;
   }
   await db.gameweek.update({ where: { id: gameweek.id }, data: { status: "SETTLED" } });
   await db.auditEvent.create({ data: { competitionId: gameweek.season.competitionId, actorId, type: "gameweek.settled", entityType: "Gameweek", entityId: gameweek.id, payload: { eliminated: defeated.length, wipeout } } });
-  return { eliminated: defeated.length, wipeout };
+  // Entries actually out after this round: defeated this round, minus any rolled-over-and-forgiven
+  // in a mass-wipeout-that-wasn't-a-split-settlement, plus the wipeout losers when it *was* a split.
+  const trulyEliminatedIds = wipeout === "rollover" ? [] : defeated;
+  return {
+    eliminated: defeated.length,
+    wipeout,
+    seasonCompleted,
+    survivorCount: seasonCompleted ? 0 : stillActive.length,
+    eliminatedEntryIds: trulyEliminatedIds.filter((id) => !rolledOverEntryIds.includes(id)),
+  };
+}
+
+// A competition admin's override for "extend or settle": forces every currently-active
+// entry to WINNER (a shared split) regardless of the usual wipeout threshold, and closes
+// the season. Used when the organiser decides not to keep extending the schedule.
+export async function forceSplitSettlement(db: Db, seasonId: string, actorId?: string) {
+  const season = await db.season.findUniqueOrThrow({ where: { id: seasonId } });
+  if (season.status === "COMPLETED") throw new Error("The season has already finished.");
+  const stillActive = await db.entry.findMany({ where: { seasonId, status: "ACTIVE" }, select: { id: true } });
+  if (!stillActive.length) throw new Error("There are no active entries left to settle.");
+  await db.entry.updateMany({ where: { id: { in: stillActive.map((entry) => entry.id) } }, data: { status: "WINNER" } });
+  await db.season.update({ where: { id: seasonId }, data: { status: "COMPLETED" } });
+  await db.auditEvent.create({ data: { competitionId: season.competitionId, actorId, type: "season.force_settled", entityType: "Season", entityId: seasonId, payload: { winners: stillActive.length } } });
+  return { winners: stillActive.length };
 }
 
 export async function voidGameweek(db: Db, gameweekId: string, actorId?: string) {
@@ -117,12 +155,12 @@ export async function voidGameweek(db: Db, gameweekId: string, actorId?: string)
 export async function buyBackEntry(db: Db, entryId: string, competitionId: string, actorId?: string) {
   const entry = await db.entry.findFirstOrThrow({ where: { id: entryId, season: { competitionId } }, include: { season: { include: { competition: true } } } });
   const rules = entry.season.rules as Rules;
-  if (!rules.buyBack?.enabled) throw new Error("Buy-back is not enabled for this season.");
-  if (entry.status !== "ELIMINATED") throw new Error("Only an eliminated entry can buy back in.");
   if (entry.season.status === "COMPLETED") throw new Error("The season has already finished.");
-  const max = rules.buyBack.maxPerEntry ?? 1;
-  if (entry.buyBackCount >= max) throw new Error("This entry has used all of its buy-backs.");
-  await db.entry.update({ where: { id: entry.id }, data: { status: "ACTIVE", eliminatedGameweekId: null, buyBackCount: { increment: 1 } } });
+  const eliminatedGameweek = entry.eliminatedGameweekId ? await db.gameweek.findUnique({ where: { id: entry.eliminatedGameweekId }, select: { number: true } }) : null;
+  if (!isBuyBackEligible(entry, eliminatedGameweek?.number ?? null, rules)) {
+    throw new Error("This entry is not eligible for a buy-back — only an entry eliminated in the first two rounds can buy back in.");
+  }
+  await db.entry.update({ where: { id: entry.id }, data: { status: "ACTIVE", eliminatedGameweekId: null, buyBackRequestedAt: null, buyBackCount: { increment: 1 } } });
   await db.payment.create({ data: { seasonId: entry.seasonId, participantId: entry.participantId, amountCents: entry.season.competition.entryFeeCents, entryCount: 0, status: "CONFIRMED", receivedAt: new Date(), notes: `Buy-back for entry #${entry.number}` } });
   await db.auditEvent.create({ data: { competitionId, actorId, type: "entry.buyback", entityType: "Entry", entityId: entry.id, payload: { buyBackCount: entry.buyBackCount + 1 } } });
   return { entryNumber: entry.number };

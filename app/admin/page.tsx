@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ACTIVE_COMPETITION_COOKIE, getAdminContext } from "@/lib/admin";
 import { ensureJoinCode } from "@/lib/competition";
+import { forceSplitSettlement } from "@/lib/engine";
 import { prisma } from "@/lib/prisma";
 
 const formatMoney = (cents: number, currency: string) => new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(cents / 100);
@@ -70,6 +71,32 @@ async function deleteCompetition(formData: FormData) {
   redirect("/admin");
 }
 
+async function settleNowFromAnnouncement(formData: FormData) {
+  "use server";
+
+  const { user, competition } = await getAdminContext();
+  const announcementId = String(formData.get("announcementId") ?? "");
+  const announcement = await prisma.roundAnnouncement.findFirst({ where: { id: announcementId, competitionId: competition.id, resolvedAt: null } });
+  if (!announcement) redirect("/admin?error=That notice was not found or has already been resolved.");
+  await prisma.$transaction(async (tx) => {
+    await forceSplitSettlement(tx, announcement.seasonId, user.id);
+    await tx.roundAnnouncement.update({ where: { id: announcement.id }, data: { resolvedAt: new Date(), resolution: "settled_split" } });
+  });
+  revalidatePath("/admin");
+  revalidatePath("/my-entries");
+  revalidatePath("/standings");
+  redirect("/admin");
+}
+
+async function acknowledgeRoundAnnouncement(formData: FormData) {
+  "use server";
+
+  const { competition } = await getAdminContext();
+  const announcementId = String(formData.get("announcementId") ?? "");
+  await prisma.roundAnnouncement.updateMany({ where: { id: announcementId, competitionId: competition.id, resolvedAt: null }, data: { resolvedAt: new Date(), resolution: "acknowledged" } });
+  revalidatePath("/admin");
+}
+
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   const { membership, competition, memberships } = await getAdminContext();
@@ -87,6 +114,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     : [0, { _sum: { amountCents: null } }];
   const raisedCents = confirmedPayments._sum.amountCents ?? 0;
   const prizeFund = Math.round((raisedCents * competition.prizePercentage) / 100);
+  const pendingAnnouncement = await prisma.roundAnnouncement.findFirst({ where: { competitionId: competition.id, resolvedAt: null }, orderBy: { createdAt: "desc" } });
 
   return (
     <div className="space-y-8">
@@ -133,6 +161,33 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text">
           This fundraiser is <span className="font-semibold">archived</span> — it is kept for your records and no longer accepts joins or picks.
         </div>
+      )}
+
+      {pendingAnnouncement && (
+        <section className="rounded-2xl border-2 border-warning/40 bg-warning/10 p-6">
+          <h2 className="text-lg font-bold text-text">Your call: extend or settle</h2>
+          <p className="mt-2 text-sm text-text-secondary">
+            {pendingAnnouncement.survivorCount} {pendingAnnouncement.survivorCount === 1 ? "entry is" : "entries are"} still standing and the schedule you started with has run out.{" "}
+            {pendingAnnouncement.extended
+              ? "We've automatically added the next real matchweek, so play continues by default."
+              : "There are no more matchweeks left in the source league to pull in, so this needs settling directly."}
+            {" "}If you&apos;d rather stop here, settle now and split the pot between everyone still standing.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <form action={settleNowFromAnnouncement}>
+              <input type="hidden" name="announcementId" value={pendingAnnouncement.id} />
+              <button className="rounded-xl bg-nav px-5 py-3 font-semibold text-white transition hover:bg-nav/90">
+                Settle now — split the pot between {pendingAnnouncement.survivorCount}
+              </button>
+            </form>
+            {pendingAnnouncement.extended && (
+              <form action={acknowledgeRoundAnnouncement}>
+                <input type="hidden" name="announcementId" value={pendingAnnouncement.id} />
+                <button className="rounded-xl border border-border bg-white px-5 py-3 font-semibold text-text transition hover:border-primary">Keep going</button>
+              </form>
+            )}
+          </div>
+        </section>
       )}
 
       {joinUrl && !archived && (

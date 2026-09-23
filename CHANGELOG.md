@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.5.0 — 2026-09-23
+
+**Runs itself: live scores, auto-settlement, extend-or-settle**
+- Replaced the synthetic, invented Premier League fixture list (fake pairings and dates
+  from a seed script) with the real 2026/27 season pulled from football-data.org — 380
+  real fixtures, correct roster (Hull City, Ipswich Town and Coventry City promoted in;
+  Burnley, West Ham and Wolves relegated out — verified against a real source, since our
+  own seed data had this backwards).
+- New hourly job fetches finished match scores from football-data.org, writes them onto
+  every active competition's fixtures, and auto-settles a round the moment every fixture
+  in it has a final score — eliminations happen without an organiser clicking anything.
+  The same follow-through (emails, auto-open the next round, extend-or-announce) now
+  happens whether a round is settled automatically or via the existing manual button on
+  Results, so the two paths behave identically.
+- When a round settles and the pre-loaded schedule has run out with the game still live,
+  the next real matchweek is pulled in automatically and a "Your call: extend or settle"
+  notice appears on the organiser's dashboard (and by email) — play continues by default;
+  the organiser's one deliberate action is choosing to settle early instead and split the
+  pot between whoever's left, if they'd rather not keep extending.
+- Buy-back is now self-service — an eliminated player requests it themselves from My
+  entries, still confirmed by the organiser (same offline-payment pattern as every entry).
+  Restricted to entries eliminated in the first two rounds only, for both the new
+  self-service path and the existing organiser-recorded one.
+- Elimination emails, sent automatically, with a buy-back link when still eligible.
+- Fixed a real bug this surfaced: `Fixture.externalId` was globally unique, which breaks
+  the moment two competitions share a real fixture (the normal case) — scoped correctly
+  now.
+
 ## 0.4.8 — 2026-09-23
 
 **Forgot password**

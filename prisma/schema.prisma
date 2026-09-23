@@ -146,6 +146,7 @@ model Competition {
   sellers              Seller[]
   auditEvents          AuditEvent[]
   setupCode            CompetitionSetupCode?
+  roundAnnouncements   RoundAnnouncement[]
 }
 
 // Issued one-at-a-time by a platform admin (see /platform) and required to create a
@@ -305,6 +306,7 @@ model Entry {
   number             Int
   status             EntryStatus  @default(PENDING_PAYMENT)
   buyBackCount       Int          @default(0)
+  buyBackRequestedAt DateTime?
   eliminatedGameweekId String?    @db.Uuid
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -345,6 +347,7 @@ model Gameweek {
   startsAt      DateTime
   deadlineAt    DateTime
   status        GameweekStatus  @default(DRAFT)
+  sourceMatchweek Int?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   season        Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
@@ -384,7 +387,7 @@ model Fixture {
   status        FixtureStatus @default(SCHEDULED)
   homeScore     Int?
   awayScore     Int?
-  externalId    String?       @unique
+  externalId    String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   gameweek      Gameweek      @relation(fields: [gameweekId], references: [id], onDelete: Cascade)
@@ -392,6 +395,7 @@ model Fixture {
   awayTeam      Team          @relation("AwayTeam", fields: [awayTeamId], references: [id])
 
   @@index([gameweekId, kickoffAt])
+  @@index([externalId])
 }
 
 model Pick {
@@ -442,4 +446,23 @@ model AuditEvent {
 
   @@index([competitionId, createdAt])
   @@index([entityType, entityId])
+}
+
+// Raised automatically when a settled round leaves more survivors than the season's
+// split threshold and there's no already-loaded next round — the schedule is extended
+// automatically (or, at the real end of the source fixtures, it can't be), and this is
+// the organiser-facing prompt to confirm that or force an early split settlement instead.
+model RoundAnnouncement {
+  id            String      @id @default(uuid()) @db.Uuid
+  competitionId String      @db.Uuid
+  seasonId      String      @db.Uuid
+  gameweekId    String      @db.Uuid
+  survivorCount Int
+  extended      Boolean
+  resolvedAt    DateTime?
+  resolution    String?
+  createdAt     DateTime    @default(now())
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@index([competitionId, resolvedAt])
 }

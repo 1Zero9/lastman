@@ -134,6 +134,7 @@ export async function injectLeagueSchedule(db: Db, seasonId: string, leagueId: s
       startsAt: fixtures[0].kickoffAt,
       deadlineAt: new Date(fixtures[0].kickoffAt.getTime() - 60 * 60 * 1000),
       status: "DRAFT" as const,
+      sourceMatchweek: matchweek,
     })),
   });
   const gameweekIdByNumber = new Map(gameweeks.map((gameweek) => [gameweek.number, gameweek.id]));
@@ -149,4 +150,43 @@ export async function injectLeagueSchedule(db: Db, seasonId: string, leagueId: s
     ),
   });
   return { rounds: ordered.length, fixtures: sourceFixtures.length };
+}
+
+// Called when a round settles with more survivors than the split threshold and no
+// already-loaded round remains — pulls in the next real matchweek automatically so
+// the competition keeps running without the organiser having to set anything up.
+// The new round is opened immediately (not left as a draft) since nothing else is
+// meant to require a manual step here.
+export async function extendSeasonWithNextMatchweek(db: Db, seasonId: string) {
+  const season = await db.season.findUniqueOrThrow({ where: { id: seasonId } });
+  if (!season.leagueId) return null;
+  const lastGameweek = await db.gameweek.findFirst({ where: { seasonId }, orderBy: { number: "desc" } });
+  const nextMatchweek = (lastGameweek?.sourceMatchweek ?? 0) + 1;
+  const fixtures = await db.sourceFixture.findMany({
+    where: { leagueId: season.leagueId, matchweek: nextMatchweek },
+    orderBy: { kickoffAt: "asc" },
+  });
+  if (!fixtures.length) return null; // the real season itself has no more matchweeks left
+
+  const gameweek = await db.gameweek.create({
+    data: {
+      seasonId,
+      number: (lastGameweek?.number ?? 0) + 1,
+      name: `Round ${(lastGameweek?.number ?? 0) + 1} (Matchweek ${nextMatchweek})`,
+      startsAt: fixtures[0].kickoffAt,
+      deadlineAt: new Date(fixtures[0].kickoffAt.getTime() - 60 * 60 * 1000),
+      status: "OPEN",
+      sourceMatchweek: nextMatchweek,
+    },
+  });
+  await db.fixture.createMany({
+    data: fixtures.map((fixture) => ({
+      gameweekId: gameweek.id,
+      homeTeamId: fixture.homeTeamId,
+      awayTeamId: fixture.awayTeamId,
+      kickoffAt: fixture.kickoffAt,
+      externalId: fixture.externalId,
+    })),
+  });
+  return { gameweekId: gameweek.id, matchweek: nextMatchweek, fixtures: fixtures.length };
 }
