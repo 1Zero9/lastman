@@ -62,9 +62,11 @@ export async function sendPasswordResetEmail(params: { to: string; name: string;
   if (!resend) return { sent: false, reason: "RESEND_API_KEY is not configured" as const };
 
   const { to, name, resetUrl } = params;
+  const logoUrl = `${new URL(resetUrl).origin}/lms-logo.png`;
   const html = `
     <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #ffffff;">
       <div style="background: ${DEFAULT_ACCENT}; padding: 28px 24px; text-align: center; border-radius: 16px 16px 0 0;">
+        <img src="${logoUrl}" alt="Last Man Standing" width="56" height="56" style="width: 56px; height: 56px; border-radius: 12px; background: #fff; object-fit: contain; padding: 4px; margin-bottom: 10px;" />
         <p style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0;">Last Man Standing</p>
       </div>
       <div style="padding: 28px 24px; color: #141413; border: 1px solid #eee; border-top: none; border-radius: 0 0 16px 16px;">
