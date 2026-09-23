@@ -144,6 +144,7 @@ export async function injectLeagueSchedule(db: Db, seasonId: string, leagueId: s
         homeTeamId: fixture.homeTeamId,
         awayTeamId: fixture.awayTeamId,
         kickoffAt: fixture.kickoffAt,
+        externalId: fixture.externalId,
       })),
     ),
   });

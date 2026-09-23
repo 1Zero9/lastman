@@ -211,6 +211,7 @@ model SourceFixture {
   homeTeamId String   @db.Uuid
   awayTeamId String   @db.Uuid
   kickoffAt  DateTime
+  externalId String?  @unique
   league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   homeTeam   Team     @relation("SourceHome", fields: [homeTeamId], references: [id], onDelete: Cascade)
   awayTeam   Team     @relation("SourceAway", fields: [awayTeamId], references: [id], onDelete: Cascade)
