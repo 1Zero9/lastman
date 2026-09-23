@@ -1,17 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import { getServerSession } from "next-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-export function organiserCodeValid(code: string) {
-  const expected = process.env.ORGANISER_ACCESS_CODE ?? "";
-  if (!expected || !code) return false;
-  const a = Buffer.from(code);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export async function hasOrganiserAccess(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({

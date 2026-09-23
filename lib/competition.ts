@@ -41,6 +41,10 @@ export function makeJoinCode(length = 6) {
   return Array.from({ length }, () => JOIN_CODE_ALPHABET[randomInt(JOIN_CODE_ALPHABET.length)]).join("");
 }
 
+export function makeSetupCode(length = 8) {
+  return Array.from({ length }, () => JOIN_CODE_ALPHABET[randomInt(JOIN_CODE_ALPHABET.length)]).join("");
+}
+
 export async function ensureJoinCode(competitionId: string, existing: string | null) {
   if (existing) return existing;
   for (let attempt = 0; attempt < 5; attempt += 1) {

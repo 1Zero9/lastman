@@ -115,6 +115,8 @@ model User {
   memberships    CompetitionMember[]
   participants   Participant[]
   auditEvents    AuditEvent[]        @relation("AuditActor")
+  setupCodesCreated CompetitionSetupCode[] @relation("SetupCodeCreatedBy")
+  setupCodesUsed    CompetitionSetupCode[] @relation("SetupCodeUsedBy")
 }
 
 model Competition {
@@ -141,6 +143,24 @@ model Competition {
   participants         Participant[]
   sellers              Seller[]
   auditEvents          AuditEvent[]
+  setupCode            CompetitionSetupCode?
+}
+
+// Issued one-at-a-time by a platform admin (see /platform) and required to create a
+// competition — replaces the old shared ORGANISER_ACCESS_CODE so every competition
+// needs its own code that only a platform admin can generate or see.
+model CompetitionSetupCode {
+  id              String       @id @default(uuid()) @db.Uuid
+  code            String       @unique
+  label           String?
+  createdByUserId String       @db.Uuid
+  createdBy       User         @relation("SetupCodeCreatedBy", fields: [createdByUserId], references: [id])
+  usedAt          DateTime?
+  usedByUserId    String?      @db.Uuid
+  usedBy          User?        @relation("SetupCodeUsedBy", fields: [usedByUserId], references: [id])
+  competitionId   String?      @unique @db.Uuid
+  competition     Competition? @relation(fields: [competitionId], references: [id])
+  createdAt       DateTime     @default(now())
 }
 
 model Seller {

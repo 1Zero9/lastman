@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { CompetitionStatus, SeasonStatus } from "@prisma/client";
-import { ACTIVE_COMPETITION_COOKIE, hasOrganiserAccess, moneyToCents, organiserCodeValid, requireSignedInUser } from "@/lib/admin";
+import { ACTIVE_COMPETITION_COOKIE, moneyToCents, requireSignedInUser } from "@/lib/admin";
 import { detectClubColor } from "@/lib/club-theme";
 import { defaultRules, injectLeagueSchedule, makeJoinCode, makeSlug } from "@/lib/competition";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +15,8 @@ async function createCompetition(formData: FormData) {
   "use server";
 
   const user = await requireSignedInUser();
-  if (!(await hasOrganiserAccess(user.id))) fail("Your account does not have organiser access yet.");
+  const setupCode = String(formData.get("setupCode") ?? "").trim().toUpperCase();
+  if (!setupCode) fail("Enter the one-time setup code you were given for this fundraiser.");
   const name = String(formData.get("name") ?? "").trim();
   const seasonName = String(formData.get("seasonName") ?? "").trim();
   const currency = String(formData.get("currency") ?? "EUR").toUpperCase();
@@ -64,6 +65,14 @@ async function createCompetition(formData: FormData) {
   try {
     await prisma.$transaction(
     async (tx) => {
+      const claim = await tx.competitionSetupCode.updateMany({
+        where: { code: setupCode, usedAt: null },
+        data: { usedAt: new Date(), usedByUserId: user.id },
+      });
+      if (claim.count === 0) {
+        throw new Error("That setup code is not valid or has already been used. Ask the platform team for a fresh one.");
+      }
+
       const competition = await tx.competition.create({
         data: {
           name,
@@ -101,6 +110,9 @@ async function createCompetition(formData: FormData) {
 
       const schedule = await injectLeagueSchedule(tx, season.id, league.id, from, to);
 
+      await tx.competitionSetupCode.update({ where: { code: setupCode }, data: { competitionId: competition.id } });
+      await tx.user.update({ where: { id: user.id }, data: { organiserApprovedAt: new Date() } });
+
       createdCompetitionId = competition.id;
 
       await tx.auditEvent.create({
@@ -127,16 +139,6 @@ async function createCompetition(formData: FormData) {
   redirect("/admin");
 }
 
-async function unlockOrganiserAccess(formData: FormData) {
-  "use server";
-
-  const user = await requireSignedInUser();
-  const accessCode = String(formData.get("accessCode") ?? "").trim();
-  if (!organiserCodeValid(accessCode)) fail("That organiser access code is not valid. Contact us to get set up as an organiser.");
-  await prisma.user.update({ where: { id: user.id }, data: { organiserApprovedAt: new Date() } });
-  revalidatePath("/admin/setup");
-}
-
 function Req() {
   return <span aria-hidden className="ml-1 text-error">*</span>;
 }
@@ -157,20 +159,6 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
       select: { id: true },
     });
     if (membership) redirect("/admin");
-  }
-  if (!(await hasOrganiserAccess(user.id))) {
-    return (
-      <div className="mx-auto max-w-xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-border">
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">Admin setup</p>
-        <h1 className="mt-2 text-2xl font-bold text-text">Organiser access required</h1>
-        <p className="mt-3 text-text-secondary">Running a fundraiser is invite-only to prevent abuse. Enter your organiser access code to unlock setup, or contact the platform team to get one.</p>
-        {error && <p className="mt-4 rounded-xl border border-error/40 bg-error/10 px-4 py-3 text-sm font-semibold text-error">{error}</p>}
-        <form action={unlockOrganiserAccess} className="mt-6 flex flex-wrap gap-3">
-          <input name="accessCode" required autoComplete="off" placeholder="Organiser access code" className="flex-1 rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
-          <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">Unlock</button>
-        </form>
-      </div>
-    );
   }
   const [leagues, fixtureRanges] = await Promise.all([
     prisma.league.findMany({ orderBy: [{ sport: "asc" }, { name: "asc" }] }),
@@ -205,6 +193,11 @@ export default async function CompetitionSetupPage({ searchParams }: { searchPar
         )}
         {duplicating && <input type="hidden" name="duplicateFrom" value={src!.id} />}
         <div className="grid gap-5 sm:grid-cols-2">
+          <label className="block sm:col-span-2">
+            <span className="mb-1.5 block text-sm font-semibold text-text">Setup code<Req /></span>
+            <input name="setupCode" required autoComplete="off" placeholder="One-time code from the platform team" className="w-full rounded-xl border border-border px-4 py-3 uppercase outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />
+            <span className="mt-1.5 block text-sm text-text-secondary">Every fundraiser needs its own one-time code — ask the platform team for one before you start.</span>
+          </label>
           <label className="block sm:col-span-2">
             <span className="mb-1.5 block text-sm font-semibold text-text">Competition name<Req /></span>
             <input name="name" required defaultValue={src?.name} placeholder="Club Last Man Standing" className="w-full rounded-xl border border-border px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/15" />

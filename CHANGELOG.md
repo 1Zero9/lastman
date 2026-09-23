@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.7 — 2026-09-23
+
+**Branding**
+- Fixed the browser favicon, which was still the default Next.js placeholder icon — rebuilt from the real
+  Last Man Standing logo. Homepage never received the "Matchday Energy" dark theme rollout from 0.4.0 —
+  now matches the full-bleed panel identity used on every other page.
+
+**Competition setup codes**
+- Replaced the single shared `ORGANISER_ACCESS_CODE` (one code, forever, for anyone) with per-competition
+  one-time codes. A platform admin generates a code in `/platform` (with an optional label), hands it to
+  the organiser, and it's consumed exactly once when `/admin/setup` creates that specific competition —
+  visible nowhere except the platform admin panel.
+- Account registration (`/get-started`) no longer needs a code at all; the code is required at the point
+  a competition is actually created instead.
+- Found and fixed a real gap this surfaced: no account held the `PLATFORM_ADMIN` role in production, so
+  `/platform` was unreachable by anyone at all, including the founder's own account.
+
 ## 0.4.0 — 2026-09-22
 
 **Player experience — "Matchday Energy" theme**

@@ -40,11 +40,11 @@ const playerSteps: Item[] = [
 const organiserSteps: Item[] = [
   {
     title: "Create your organiser account",
-    body: "Register on the Get started page with your organiser access code (organiser accounts are invite-only). Your organiser account is separate from playing.",
+    body: "Register on the Get started page with your email and a password. Your organiser account is separate from playing.",
   },
   {
     title: "Set up the fundraiser",
-    body: "In the admin area, pick a source league, a run window, the entry fee, the prize split, buy-backs and autopick, plus your club name, website and colours. Every round and fixture in the window is created automatically, and the whole app takes on your club's colours.",
+    body: "You'll need a one-time setup code from the platform team — every fundraiser gets its own code and it only works once. With that in hand, pick a source league, a run window, the entry fee, the prize split, buy-backs and autopick, plus your club name, website and colours. Every round and fixture in the window is created automatically, and the whole app takes on your club's colours.",
   },
   {
     title: "Update your branding any time",
@@ -78,8 +78,8 @@ const platformItems: Item[] = [
     body: "The Platform area deliberately excludes participant names, contact details, entries and picks. It exists for provisioning and organiser recovery only.",
   },
   {
-    title: "Organiser access",
-    body: "New organisers self-register with the organiser access code (set via the ORGANISER_ACCESS_CODE environment variable — if unset, self-registration is closed). Platform admins can grant or revoke organiser access for any account.",
+    title: "Competition setup codes",
+    body: "Only a platform admin can generate the one-time setup code a fundraiser needs to complete setup — a fresh code per competition, from the Platform area. Platform admins can also grant or revoke organiser access for any account directly.",
   },
   {
     title: "Provision and recover organisers",
