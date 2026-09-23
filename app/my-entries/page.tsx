@@ -11,6 +11,7 @@ import { requireSignedInUser } from "@/lib/admin";
 import { getPotSummary } from "@/lib/competition";
 import { eligibleTeamIds } from "@/lib/engine";
 import { prisma } from "@/lib/prisma";
+import { isDemoCompetition } from "@/lib/demo";
 
 type Rules = {
   noTeamRepeats?: boolean;
@@ -67,6 +68,8 @@ async function submitPick(formData: FormData) {
     include: { season: true },
   });
   if (!entry) fail("This entry is not available.");
+  const competition = await prisma.competition.findUniqueOrThrow({ where: { id: entry.season.competitionId }, select: { slug: true } });
+  if (isDemoCompetition(competition.slug)) fail("The showcase competition is read-only.");
   const gameweek = await prisma.gameweek.findFirst({
     where: { seasonId: entry.seasonId, status: "OPEN" },
     orderBy: { number: "asc" },

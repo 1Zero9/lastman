@@ -32,6 +32,10 @@ export default async function DemoPage() {
           <div className="divide-y divide-white/10">{gameweek.fixtures.slice(0, 5).map((fixture) => <div key={fixture.id} className="flex items-center justify-between gap-3 px-5 py-3"><span className="min-w-0 flex-1 truncate text-right font-medium">{fixture.homeTeam.name}</span><span className="shrink-0 rounded-lg bg-white/10 px-3 py-1 text-xs font-semibold text-white/65">{formatDate(fixture.kickoffAt)}</span><span className="min-w-0 flex-1 truncate font-medium">{fixture.awayTeam.name}</span></div>)}</div>
         </section>
       )}
+      <section className="grid gap-4 sm:grid-cols-2">
+        <Link href="/demo/player" className="rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:border-accent/50 hover:bg-white/10"><p className="text-xs font-bold uppercase tracking-wide text-accent">Player walkthrough</p><h2 className="mt-2 text-lg font-bold">Make a pick and stay alive</h2><p className="mt-2 text-sm text-white/60">See the entry dashboard, deadline and selection flow with disabled sample controls.</p></Link>
+        <Link href="/demo/organiser" className="rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:border-accent/50 hover:bg-white/10"><p className="text-xs font-bold uppercase tracking-wide text-accent">Organiser walkthrough</p><h2 className="mt-2 text-lg font-bold">Run the fundraiser</h2><p className="mt-2 text-sm text-white/60">See approvals, progress and round management without exposing a real competition.</p></Link>
+      </section>
       <div className="flex flex-wrap gap-3"><Link href="/sign-in" className="rounded-xl bg-accent px-5 py-3 font-bold text-nav">Sign in</Link><Link href="/get-started" className="rounded-xl border border-white/20 px-5 py-3 font-bold text-white hover:bg-white/10">Organise a fundraiser</Link></div>
     </div>
   );

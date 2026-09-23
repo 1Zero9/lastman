@@ -5,7 +5,6 @@ import { prisma } from "../lib/prisma";
 
 const SLUG = "demo-fundraiser";
 const LEAGUE_NAME = "Premier League";
-const PASSWORD = "LastManDemo26!";
 const JOIN_CODE = "DEMO26";
 
 const ACCOUNTS = {
@@ -26,8 +25,8 @@ const CROWD: Array<{ name: string; entries: number; pick: boolean }> = [
   { name: "Harry Nolan", entries: 2, pick: true },
 ];
 
-async function upsertUser(email: string, displayName: string, extra: { platformRole?: "PLATFORM_ADMIN"; organiserApprovedAt?: Date } = {}) {
-  const passwordHash = await bcrypt.hash(PASSWORD, 12);
+async function upsertUser(email: string, displayName: string, password: string, extra: { platformRole?: "PLATFORM_ADMIN"; organiserApprovedAt?: Date } = {}) {
+  const passwordHash = await bcrypt.hash(password, 12);
   return prisma.user.upsert({
     where: { email },
     update: { displayName, passwordHash, ...extra },
@@ -36,11 +35,13 @@ async function upsertUser(email: string, displayName: string, extra: { platformR
 }
 
 async function main() {
+  const password = process.env.DEMO_SEED_PASSWORD;
+  if (!password || password.length < 16) throw new Error("Set a unique DEMO_SEED_PASSWORD of at least 16 characters before creating local seed accounts.");
   const [platformAdmin, organiser, player, pending] = await Promise.all([
-    upsertUser(ACCOUNTS.platform.email, ACCOUNTS.platform.name, { platformRole: "PLATFORM_ADMIN" }),
-    upsertUser(ACCOUNTS.organiser.email, ACCOUNTS.organiser.name, { organiserApprovedAt: new Date() }),
-    upsertUser(ACCOUNTS.player.email, ACCOUNTS.player.name),
-    upsertUser(ACCOUNTS.pending.email, ACCOUNTS.pending.name),
+    upsertUser(ACCOUNTS.platform.email, ACCOUNTS.platform.name, password, { platformRole: "PLATFORM_ADMIN" }),
+    upsertUser(ACCOUNTS.organiser.email, ACCOUNTS.organiser.name, password, { organiserApprovedAt: new Date() }),
+    upsertUser(ACCOUNTS.player.email, ACCOUNTS.player.name, password),
+    upsertUser(ACCOUNTS.pending.email, ACCOUNTS.pending.name, password),
   ]);
 
   const existing = await prisma.competition.findUnique({ where: { slug: SLUG } });
@@ -50,7 +51,7 @@ async function main() {
       update: { role: "OWNER" },
       create: { competitionId: existing.id, userId: organiser.id, role: "OWNER" },
     });
-    console.log(`Demo fundraiser already exists — accounts refreshed with password "${PASSWORD}".`);
+    console.log("Demo fundraiser already exists — account passwords refreshed.");
     console.log("Delete it from the admin danger zone (signed in as the demo organiser) to reseed from scratch.");
     return;
   }
@@ -161,7 +162,7 @@ async function main() {
   });
 
   console.log(`Seeded "${competition.name}" (join code ${competition.joinCode}).`);
-  console.log(`All demo accounts use the password "${PASSWORD}":`);
+  console.log("Demo accounts created:");
   console.log(`  Platform admin: ${platformAdmin.email}`);
   console.log(`  Organiser:      ${organiser.email}`);
   console.log(`  Player:         ${player.email} (2 live entries, 1 eliminated)`);
