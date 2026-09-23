@@ -57,6 +57,33 @@ export async function sendPickReminderEmail(params: {
   return { sent: true, id: result.data?.id };
 }
 
+export async function sendPasswordResetEmail(params: { to: string; name: string; resetUrl: string }) {
+  const resend = getClient();
+  if (!resend) return { sent: false, reason: "RESEND_API_KEY is not configured" as const };
+
+  const { to, name, resetUrl } = params;
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #ffffff;">
+      <div style="background: ${DEFAULT_ACCENT}; padding: 28px 24px; text-align: center; border-radius: 16px 16px 0 0;">
+        <p style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0;">Last Man Standing</p>
+      </div>
+      <div style="padding: 28px 24px; color: #141413; border: 1px solid #eee; border-top: none; border-radius: 0 0 16px 16px;">
+        <h1 style="font-size: 18px; margin: 0 0 14px;">Hi ${escapeHtml(name)}, reset your password</h1>
+        <p style="font-size: 14px; line-height: 22px; color: #444; margin: 0;">
+          Someone requested a password reset for this account. If that was you, choose a new password below —
+          this link expires in 1 hour. If it wasn't you, you can ignore this email; your password stays unchanged.
+        </p>
+        <a href="${resetUrl}" style="display: inline-block; margin-top: 20px; padding: 12px 22px; background: ${DEFAULT_ACCENT}; color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; border-radius: 10px;">Choose a new password</a>
+        <p style="margin-top: 28px; font-size: 11px; color: #999;">Last Man Standing · unofficial fundraising tool · money is handled offline by your organiser</p>
+      </div>
+    </div>
+  `.trim();
+
+  const result = await resend.emails.send({ from: FROM, to, subject: "Reset your Last Man Standing password", html });
+  if (result.error) return { sent: false, reason: result.error.message };
+  return { sent: true, id: result.data?.id };
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }

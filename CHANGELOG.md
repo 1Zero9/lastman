@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.8 — 2026-09-23
+
+**Forgot password**
+- Added a real self-service password reset for players and organisers: "Forgot your password?" on sign-in
+  leads to `/forgot-password`, which emails a one-hour, one-time link via Resend. Always shows the same
+  generic confirmation whether or not the email has an account, so the flow can't be used to check who's
+  registered. Previously the only recovery path was a platform admin manually resetting someone's password
+  by hand in `/platform`.
+
 ## 0.4.7 — 2026-09-23
 
 **Branding**

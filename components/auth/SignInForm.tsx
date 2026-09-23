@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 
 export function SignInForm() {
@@ -45,6 +46,7 @@ export function SignInForm() {
           Password
         </label>
         <input id="password" name="password" type="password" autoComplete="current-password" required className={inputClass} />
+        <Link href="/forgot-password" className="mt-1.5 inline-block text-xs font-semibold text-white/50 underline hover:text-white/75">Forgot your password?</Link>
       </div>
       {error && <p role="alert" className="rounded-lg bg-error/15 px-3 py-2 text-sm font-medium text-red-300">{error}</p>}
       <button

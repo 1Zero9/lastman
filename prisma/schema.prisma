@@ -110,6 +110,8 @@ model User {
   passwordHash   String?
   platformRole   PlatformRole        @default(MEMBER)
   organiserApprovedAt DateTime?
+  passwordResetToken      String?    @unique
+  passwordResetExpiresAt  DateTime?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   memberships    CompetitionMember[]

@@ -5,10 +5,10 @@ import { redirect } from "next/navigation";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { authOptions } from "@/lib/auth";
 
-export default async function SignInPage({ searchParams }: { searchParams: Promise<{ registered?: string; exists?: string }> }) {
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ registered?: string; exists?: string; reset?: string }> }) {
   const session = await getServerSession(authOptions);
   if (session) redirect("/");
-  const { registered, exists } = await searchParams;
+  const { registered, exists, reset } = await searchParams;
 
   return (
     <div className="relative overflow-hidden rounded-3xl bg-[radial-gradient(120%_70%_at_50%_-10%,#1c3a2e_0%,#0b1520_55%,#060a10_100%)] p-5 py-12 sm:p-9 sm:py-16">
@@ -24,6 +24,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
         </div>
         {registered && <p className="mb-5 rounded-xl bg-accent/15 p-3 text-center text-sm font-semibold text-accent">Account created — sign in to set up your fundraiser.</p>}
         {exists && <p className="mb-5 rounded-xl bg-white/10 p-3 text-center text-sm font-semibold text-white">You already have an account with that email — sign in below.</p>}
+        {reset && <p className="mb-5 rounded-xl bg-accent/15 p-3 text-center text-sm font-semibold text-accent">Password updated — sign in with your new password.</p>}
         <SignInForm />
         <div className="mt-7 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4 text-center">
           <p className="text-base font-bold text-white">Don&apos;t have an account?</p>
