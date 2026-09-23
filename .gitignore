@@ -40,6 +40,9 @@ Last Man Standing_rev2/.next/
 # vercel
 .vercel
 
+# local database backups/snapshots — real participant data, never committed
+/backups/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
