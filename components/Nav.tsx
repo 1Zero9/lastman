@@ -8,7 +8,7 @@ import { NavIcon } from "@/components/NavIcon";
 
 const publicLinks = [
   { href: "/", label: "Home" },
-  { href: "/fixtures", label: "Fixtures" },
+  { href: "/demo", label: "Demo" },
   { href: "/rules", label: "Rules" },
 ];
 
@@ -20,6 +20,7 @@ export function Nav({ isAuthenticated, isOrganiser = false, isPlatform = false }
   const links: NavigationLink[] = [
     ...publicLinks,
     ...(isAuthenticated ? [
+      { href: "/fixtures", label: "Fixtures" },
       { href: "/my-entries", label: "My entries" },
       { href: "/standings", label: "Standings" },
       { href: "/leaderboard", label: "Leaderboard" },

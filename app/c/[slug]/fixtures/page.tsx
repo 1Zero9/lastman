@@ -1,6 +1,8 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { notFound } from "next/navigation";
-import { getPublicFixtures } from "@/lib/public-fixtures";
+import { getCompetitionFixtures, getPublicFixtures } from "@/lib/public-fixtures";
+import { isDemoCompetition } from "@/lib/demo";
+import { requireCompetitionAccess } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,9 @@ type GameweekMeta = {
 
 export default async function FixturesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const fixtureData = await getPublicFixtures(slug);
+  const demo = isDemoCompetition(slug);
+  if (!demo) await requireCompetitionAccess(slug);
+  const fixtureData = demo ? await getPublicFixtures(slug) : await getCompetitionFixtures(slug);
   if (!fixtureData) notFound();
   const { competition, season, gameweekMeta, activeGameweeks } = fixtureData;
 
