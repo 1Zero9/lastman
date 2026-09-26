@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+**Preview deployments no longer share the production database**
+- `PRISMA_DATABASE_URL`/`POSTGRES_URL`/`DATABASE_URL` previously pointed preview and
+  production deployments at the same Prisma Postgres instance — any preview build (any
+  branch, any PR) had full read/write access to real participant, payment and pick data.
+- Provisioned a second Prisma Postgres database (`prisma-postgres-alizarin-field`), scoped
+  to `preview` only, with the same schema applied via `prisma migrate deploy`. Production
+  env vars are now scoped to `production` only. See docs/DECISIONS.md.
+
 ## 0.5.0 — 2026-09-23
 
 **Runs itself: live scores, auto-settlement, extend-or-settle**

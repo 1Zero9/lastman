@@ -1,13 +1,10 @@
 # Product backlog
 
-## UI redesign — priority: next after authentication
+## UI redesign — done (0.4.0, 2026-09-22)
 
-The current prototype is not suitable as the product UI. The supplied review identifies these issues:
+Superseded by the "Matchday Energy" theme: mobile-first, action-led player pages (scoreboard header,
+live countdown banner, redesigned match picker), with admin kept on its own light/functional layout.
+See CHANGELOG.md 0.4.0 and docs/DECISIONS.md #6–#8.
 
-- Desktop-style stacked header and navigation consume too much of the mobile viewport.
-- The oversized explanatory card puts rules ahead of the member’s next action.
-- Static sample statistics and gameweek data make the home page look like a report, not a live competition.
-
-The redesign should be mobile-first and action-led: show the member’s next pick or current status first,
-use compact navigation, and reserve explanatory content for a separate rules/help surface. Admin and member
-workflows should have distinct navigation and information density.
+No open items tracked here currently — see docs/DECISIONS.md for recent locked decisions and
+CHANGELOG.md for what's shipped.
